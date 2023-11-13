@@ -60,7 +60,7 @@ Usage:
 
 ### notify-inject-PoC.js
 
-[frida-scripts/notifyInjectPoC.js](frida-scripts/notify-inject-PoC.js)
+[frida-scripts/notify-inject-PoC.js](frida-scripts/notify-inject-PoC.js)
 
 Exploits an oversight in IKEv2 notify payload parsing to inject unencrypted, unauthenticated private notify payloads into an otherwise genuine IKEv2 session to trick the watch into associating an arbitrary IP with the paired iPhone.
 
@@ -78,5 +78,5 @@ Usage:
 
 ```
 cd alloy-parser
-./gradlew run --args=path/to/logfile
+./gradlew run --args=example.log
 ```
