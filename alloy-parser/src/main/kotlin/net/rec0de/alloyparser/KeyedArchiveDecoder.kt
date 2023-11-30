@@ -34,14 +34,24 @@ class KeyedArchiveDecoder {
                 is BPUid -> optionallyResolveObjectReference(objects.values[UInt.fromBytesBig(thing.value).toInt()], objects)
                 is BPArray -> BPArray(thing.entries, thing.values.map { optionallyResolveObjectReference(it, objects) })
                 is BPSet -> BPSet(thing.entries, thing.values.map { optionallyResolveObjectReference(it, objects) })
-                is BPDict -> BPDict(thing.values.map {
-                    Pair(optionallyResolveObjectReference(it.key, objects), optionallyResolveObjectReference(it.value, objects))
-                }.toMap())
+                is BPDict -> {
+                    // nested keyed archives will be decoded separately
+                    if(isKeyedArchive(thing))
+                        thing
+                    else
+                        BPDict(thing.values.map {
+                            Pair(optionallyResolveObjectReference(it.key, objects), optionallyResolveObjectReference(it.value, objects))
+                        }.toMap())
+                }
                 else -> thing
             }
         }
 
         private fun transformSupportedClasses(thing: CodableBPListObject): BPListObject {
+            // decode nested archives
+            if(isKeyedArchive(thing))
+                return decode(thing as BPDict)
+
             return when(thing) {
                 is BPArray -> {
                     val transformedValues = thing.values.map { transformSupportedClasses(it) }

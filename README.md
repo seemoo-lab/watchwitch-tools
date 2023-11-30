@@ -44,6 +44,8 @@ Usage:
 
 A collection of frida hooks for `identityservicesd` to capture Alloy traffic. Optionally includes decryptions of A-over-C protected messages. Designed to be used with the Alloy parser for further investigation.  
 
+Note: To capture topics for all messages (which is very helpful!), turn the watch off before starting the script and restart it while already capturing.
+
 Usage:
 
 `frida -U identityservicesd -l logAlloy.js`
@@ -78,5 +80,13 @@ Usage:
 
 ```
 cd alloy-parser
+
+# basic usage, parse and log all messages
 ./gradlew run --args=example.log
+
+# log only messages for specified topics
+./gradlew run --args="--include=com.apple.topicA,com.apple.topicB example.log"
+
+# log all messages except specified topics
+./gradlew run --args="--exclude=com.apple.topicA,com.apple.topicB example.log"
 ```

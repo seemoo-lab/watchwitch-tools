@@ -370,7 +370,7 @@ class ServiceMapMessage(val streamID: Int, val serviceName: String, val reason: 
                 throw Exception("Expected UTunMsg type 0x27 for ServiceMapMessage but got 0x${bytes[0].toString(16)}")
             parseOffset = 1
 
-            //val len = readInt(bytes, 4)
+            readInt(bytes, 4) // consume length field
 
             var reason: Int? = null
             var streamID: Int? = null
