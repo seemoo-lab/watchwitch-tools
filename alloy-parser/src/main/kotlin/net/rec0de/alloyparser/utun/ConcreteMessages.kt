@@ -435,3 +435,27 @@ open class ExpiredAckMessage(sequence: Int) : AckMessage(sequence) {
     override fun toBytes() = baseHeaderBytes(4, 0x25)
     override fun toString() = "ExpiredAckMessage"
 }
+
+class GenericDataMessage(
+    override val name: String,
+    sequence: Int,
+    streamID: Int,
+    flags: Int,
+    responseIdentifier: String?,
+    messageUUID: UUID,
+    topic: String?,
+    expiryDate: Long?,
+    payload: ByteArray
+): DataMessage(sequence, streamID, flags, responseIdentifier, messageUUID, topic, expiryDate, payload) {
+
+    companion object : UTunParseCompanion() {
+        @Synchronized
+        fun parse(bytes: ByteArray, name: String, type: Int): GenericDataMessage {
+            val commonData = parse(bytes, type)
+            val c = commonData.first
+            // gzip compressed data can appear here with no correlation to the 'compressed' flag
+            val rest = if(GzipDecoder.bufferIsGzipCompressed(commonData.second)) GzipDecoder.inflate(commonData.second) else commonData.second
+            return GenericDataMessage(name, c.sequence, c.streamID, c.flags, c.responseIdentifier, c.messageUUID, c.topic, c.expiryDate, rest)
+        }
+    }
+}

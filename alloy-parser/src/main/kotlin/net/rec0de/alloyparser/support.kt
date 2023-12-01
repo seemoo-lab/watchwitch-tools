@@ -100,3 +100,9 @@ fun Int.floatFromIntBytes(): Float {
     b.putInt(this)
     return b.getFloat(0)
 }
+
+fun Date.toAppleTimestamp(): Double {
+    // NSDate timestamps encode time as seconds since Jan 01 2001 with millisecond precision as doubles
+    val canonicalTimestamp = this.time
+    return (canonicalTimestamp - 978307200000).toDouble() / 1000
+}

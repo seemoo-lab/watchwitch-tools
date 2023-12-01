@@ -18,10 +18,7 @@ class KeyedArchiveDecoder {
 
         fun decode(data: BPDict): BPListObject {
             // get offset of the root object in the $objects list
-            val top =
-                UInt.fromBytesBig(((data.values[topKey]!! as BPDict).values[rootKey]!! as BPUid).value)
-                    .toInt()
-
+            val top = UInt.fromBytesBig(((data.values[topKey]!! as BPDict).values[rootKey]!! as BPUid).value).toInt()
             val objects = data.values[objectsKey]!! as BPArray
 
             val rootObj = objects.values[top]
@@ -32,7 +29,7 @@ class KeyedArchiveDecoder {
         private fun optionallyResolveObjectReference(thing: CodableBPListObject, objects: BPArray): CodableBPListObject {
             return when(thing) {
                 is BPUid -> optionallyResolveObjectReference(objects.values[UInt.fromBytesBig(thing.value).toInt()], objects)
-                is BPArray -> BPArray(thing.entries, thing.values.map { optionallyResolveObjectReference(it, objects) })
+                is BPArray -> BPArray(thing.values.map { optionallyResolveObjectReference(it, objects) })
                 is BPSet -> BPSet(thing.entries, thing.values.map { optionallyResolveObjectReference(it, objects) })
                 is BPDict -> {
                     // nested keyed archives will be decoded separately
@@ -56,7 +53,7 @@ class KeyedArchiveDecoder {
                 is BPArray -> {
                     val transformedValues = thing.values.map { transformSupportedClasses(it) }
                     if(transformedValues.all { it is CodableBPListObject })
-                        BPArray(thing.entries, transformedValues.map { it as CodableBPListObject })
+                        BPArray(transformedValues.map { it as CodableBPListObject })
                     else
                         NSArray(transformedValues)
                 }
