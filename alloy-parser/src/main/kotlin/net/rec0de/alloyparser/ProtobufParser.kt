@@ -182,8 +182,8 @@ data class ProtoBuf(val objs: Map<Int, List<ProtoValue>>, val bytes: ByteArray =
         return (v as ProtoLen?)?.asString()
     }
 
-    fun readOptDate(field: Int) : Date? {
-        return (readOptionalSinglet(field) as ProtoI64?)?.asDate()
+    fun readOptDate(field: Int, appleEpoch: Boolean = true) : Date? {
+        return (readOptionalSinglet(field) as ProtoI64?)?.asDate(appleEpoch)
     }
 
     fun readOptDouble(field: Int) : Double? {
@@ -253,9 +253,10 @@ data class ProtoI64(val value: Long) : ProtoValue {
      * Assume this I64 value represents a double containing an NSDate timestamp (seconds since Jan 01 2001)
      * and turn it into a Date object
      */
-    fun asDate(): Date {
+    fun asDate(appleEpoch: Boolean = true): Date {
         val timestamp = asDouble()
-        return Date((timestamp*1000).toLong() + 978307200000)
+        val offset = if(appleEpoch) 978307200000L else 0L
+        return Date((timestamp*1000).toLong() + offset)
     }
 
     fun asDouble(): Double = value.doubleFromLongBytes()

@@ -1,12 +1,12 @@
 package net.rec0de.alloyparser
 
+import net.rec0de.alloyparser.bulletin.BulletinRequest
 import net.rec0de.alloyparser.health.NanoSyncMessage
 import net.rec0de.alloyparser.utun.*
 import java.io.File
-import java.math.BigInteger
 import java.nio.ByteBuffer
 import java.security.MessageDigest
-import java.util.*
+
 
 val topicMap = mutableMapOf<Int,String>()
 val aovercLookup = mutableMapOf<String,ByteArray>()
@@ -58,6 +58,14 @@ fun main(args: Array<String>) {
 
 fun readLine(line: String, include: Set<String>, exclude: Set<String>) {
     var rest = line
+
+    // manual topic mapping support
+    if(rest.startsWith("map ")) {
+        val parts = rest.removePrefix("map ").split(" ")
+        val stream = Integer.valueOf(parts[0])
+        val topic = parts[1]
+        topicMap[stream] = topic
+    }
 
     if(!rest.startsWith("snd ") && !rest.startsWith("rcv ")) {
         //println("ignoring input line: '$rest'")
@@ -134,77 +142,95 @@ fun readUTun(incoming: Boolean, opcode: Int, bytes: ByteArray, include: Set<Stri
     println("$direction $parsed")
 
     when(parsed) {
-        is DataMessage -> {
-            if(BPListParser.bufferIsBPList(parsed.payload)) {
-                val bpcontent = BPListParser().parse(parsed.payload)
-                if(Decryptor.isEncryptedMessage(bpcontent)) {
-                    val plain = tryDecrypt(parsed.payload)
-                    if(plain != null) {
-                        val pb = if(parsed.responseIdentifier == null)
-                            ProtobufParser().parse(plain.fromIndex(3))
-                        else
-                            ProtobufParser().parse(plain.fromIndex(2))
+        is DataMessage -> logDataMessage(parsed)
+        is ProtobufMessage -> logProtobufMessage(parsed)
+    }
+}
 
-                        try {
-                            println(NanoSyncMessage.fromSafePB(pb))
-                        }
-                        catch(e: Exception) {
-                            // if we fail parsing something, print the failing protobuf for debugging and then still fail
-                            println("Failed while parsing: $pb")
-                            println("bytes: ${plain.hex()}")
-                            println(e.toString())
-                        }
-                    }
-                    else {
-                        println("payload decryption unavailable")
-                    }
-                }
+fun logProtobufMessage(parsed: ProtobufMessage) {
+    // for some reason Protobuf messages sometimes carry, guess what, bplists
+    if(BPListParser.bufferIsBPList(parsed.payload)) {
+        val bpcontent = BPListParser().parse(parsed.payload)
+        if(Decryptor.isEncryptedMessage(bpcontent)) {
+            val plain = tryDecrypt(parsed.payload)
+            println(plain?.hex())
+        }
+        else
+            println(bpcontent)
+    }
+    else {
+        // messages (esp bulletindistributor) sometimes have a trailer that is also protobuf with the length encoded in the last two bytes
+        val len = UInt.fromBytesLittle(parsed.payload.fromIndex(parsed.payload.size-2)).toInt()
+        val pb: ProtoBuf
+        if(len < parsed.payload.size - 2 && len < 100) {
+            val endIndex = parsed.payload.size - 2
+            val startIndex = endIndex - len
+            val potentialTrailer = parsed.payload.sliceArray(startIndex until endIndex)
+            val rest = try {
+                val parsedTrailer = ProtobufParser().parse(potentialTrailer)
+                println("trailer: $parsedTrailer")
+                parsed.payload.sliceArray(0 until startIndex)
+            }
+            catch (e: Exception) {
+                parsed.payload
+            }
+            pb = ProtobufParser().parse(rest)
+        }
+        else
+            pb = ProtobufParser().parse(parsed.payload)
+
+        if(parsed.topic == "com.apple.private.alloy.bulletindistributor" && pb.readOptionalSinglet(1) is ProtoBuf) {
+            println(BulletinRequest.fromSafePB(pb))
+        }
+        else
+            println(pb)
+    }
+}
+
+fun logDataMessage(parsed: DataMessage){
+    if(BPListParser.bufferIsBPList(parsed.payload)) {
+        val bpcontent = BPListParser().parse(parsed.payload)
+        if(Decryptor.isEncryptedMessage(bpcontent)) {
+            val plain = tryDecrypt(parsed.payload)
+            if(plain != null) {
+                val pb = if(parsed.responseIdentifier == null)
+                    ProtobufParser().parse(plain.fromIndex(3))
                 else
-                    println(bpcontent)
+                    ProtobufParser().parse(plain.fromIndex(2))
+
+                try {
+                    println(NanoSyncMessage.fromSafePB(pb))
+                }
+                catch(e: Exception) {
+                    // if we fail parsing something, print the failing protobuf for debugging and then still fail
+                    println("Failed while parsing: $pb")
+                    println("bytes: ${plain.hex()}")
+                    println(e.toString())
+                }
             }
             else {
-                // DataMessage payloads can also be protobufs, with either 0, 2, or 3 byte unknown prefixes
-                // *fun*, isn't it?
-                try {
-                    println(ProtobufParser().parse(parsed.payload).toString())
-                }
-                catch(_: Exception) {
-                    try {
-                        println(ProtobufParser().parse(parsed.payload.fromIndex(2)).toString())
-                    }
-                    catch(_: Exception) {
-                        try {
-                            println(ProtobufParser().parse(parsed.payload.fromIndex(3)).toString())
-                        }
-                        catch(_: Exception) {}
-                    }
-                }
+                println("payload decryption unavailable")
             }
         }
-        is ProtobufMessage -> {
-            // for some reason Protobuf messages sometimes carry, guess what, bplists
-            if(BPListParser.bufferIsBPList(parsed.payload)) {
-                val bpcontent = BPListParser().parse(parsed.payload)
-                if(Decryptor.isEncryptedMessage(bpcontent)) {
-                    val plain = tryDecrypt(parsed.payload)
-                    println(plain?.hex())
-                }
-                else
-                    println(bpcontent)
+        else
+            println(bpcontent)
+    }
+    else {
+        // DataMessage payloads can also be protobufs, with either 0, 2, or 3 byte unknown prefixes
+        // *fun*, isn't it?
+        try {
+            println(ProtobufParser().parse(parsed.payload).toString())
+        }
+        catch(_: Exception) {
+            try {
+                println(ProtobufParser().parse(parsed.payload.fromIndex(2)).toString())
             }
-            else {
+            catch(_: Exception) {
                 try {
-                    println(ProtobufParser().parse(parsed.payload))
-                } catch(_: Exception){
-                    // Protobuf payloads sometimes hava a 2 byte non-protobuf trailer
-                    try {
-                        println(ProtobufParser().parse(parsed.payload.copyOfRange(0, parsed.payload.size-2)))
-                    } catch(_: Exception){
-
-                    }
+                    println(ProtobufParser().parse(parsed.payload.fromIndex(3)).toString())
                 }
+                catch(_: Exception) {}
             }
-
         }
     }
 }
