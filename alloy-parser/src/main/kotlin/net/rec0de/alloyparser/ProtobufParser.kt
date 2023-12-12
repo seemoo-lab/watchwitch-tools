@@ -239,6 +239,8 @@ data class ProtoI32(val value: Int) : ProtoValue {
 }
 
 data class ProtoI64(val value: Long) : ProtoValue {
+    constructor(value: Double) : this(value.longBytesFromDouble())
+
     override val wireType = 1
     override fun toString() = "I64($value)"
 
@@ -263,6 +265,9 @@ data class ProtoI64(val value: Long) : ProtoValue {
 }
 
 data class ProtoVarInt(val value: Long) : ProtoValue {
+    constructor(value: Boolean) : this(if(value) 1 else 0)
+    constructor(value: Int) : this(value.toLong())
+
     override val wireType = 0
     override fun toString() = "VarInt($value)"
 
@@ -292,8 +297,7 @@ data class ProtoString(val stringValue: String) : ProtoLen(stringValue.toByteArr
     override fun asString() = stringValue
 }
 
-class ProtoBPList(val value: ByteArray) : ProtoValue {
-    override val wireType = 2 // LEN
+class ProtoBPList(value: ByteArray) : ProtoLen(value) {
     val parsed = BPListParser().parse(value)
     override fun toString() = "bplist($parsed)"
 

@@ -6,7 +6,7 @@ import kotlin.math.ceil
 import kotlin.math.log2
 
 // based on https://medium.com/@karaiskc/understanding-apples-binary-property-list-format-281e6da00dbd
-class BPListParser {
+class BPListParser(private val nestedDecode: Boolean = true) {
     private val objectMap = mutableMapOf<Int, CodableBPListObject>()
     private var objectRefSize = 0
     private var offsetTableOffsetSize = 0
@@ -113,7 +113,7 @@ class BPListParser {
                 val data = bytes.sliceArray(effectiveOffset until effectiveOffset+byteLen)
 
                 // decode nested bplists
-                return if(bufferIsBPList(data))
+                return if(bufferIsBPList(data) && nestedDecode)
                     BPListParser().parseCodable(data)
                 else
                     BPData(data)
@@ -468,6 +468,10 @@ data class NSArray(val values: List<BPListObject>): BPListObject(), KeyedArchive
     override fun toString() = values.toString()
 }
 
+data class NSSet(val values: Set<BPListObject>): BPListObject(), KeyedArchiveCodable {
+    override fun toString() = values.toString()
+}
+
 data class NSDict(val values: Map<BPListObject, BPListObject>) : BPListObject(), KeyedArchiveCodable {
     override fun toString() = values.toString()
 }
@@ -478,4 +482,8 @@ data class NSDate(val value: Date) : BPListObject(), KeyedArchiveCodable {
 
 data class NSUUID(val value: ByteArray) : BPListObject(), KeyedArchiveCodable {
     override fun toString() = Utils.uuidFromBytes(value).toString()
+}
+
+data class NSData(val value: ByteArray) : BPListObject(), KeyedArchiveCodable {
+    override fun toString() = "NSData(${value.hex()})"
 }

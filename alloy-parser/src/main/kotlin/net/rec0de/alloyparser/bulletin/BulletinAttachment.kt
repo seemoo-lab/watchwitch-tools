@@ -25,11 +25,11 @@ class BulletinAttachment(val identifier: String?, val type: Int?, val url: Strin
         if(identifier != null)
             fields[1] = listOf(ProtoString(identifier))
         if(type != null)
-            fields[3] = listOf(ProtoVarInt(type.toLong()))
+            fields[3] = listOf(ProtoVarInt(type))
         if(url != null)
             fields[4] = listOf(ProtoString(url))
         if(isUpdated != null)
-            fields[5] = listOf(ProtoVarInt(if(isUpdated) 1 else 0))
+            fields[5] = listOf(ProtoVarInt(isUpdated))
 
         return ProtoBuf(fields).renderStandalone()
     }

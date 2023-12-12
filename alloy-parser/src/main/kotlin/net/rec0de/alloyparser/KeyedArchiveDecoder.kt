@@ -78,9 +78,17 @@ class KeyedArchiveDecoder {
                                 val string = (thing.values[BPAsciiString("NS.string")]!! as BPAsciiString)
                                 string
                             }
-                            "NSArray" -> {
+                            "NSMutableArray", "NSArray" -> {
                                 val list = (thing.values[BPAsciiString("NS.objects")]!! as BPArray).values.map { transformSupportedClasses(it) }
                                 NSArray(list)
+                            }
+                            "NSMutableSet", "NSSet" -> {
+                                val list = (thing.values[BPAsciiString("NS.objects")]!! as BPArray).values.map { transformSupportedClasses(it) }
+                                NSSet(list.toSet())
+                            }
+                            "NSData", "NSMutableData" -> {
+                                val bytes = (thing.values[BPAsciiString("NS.data")]!! as BPData).value
+                                NSData(bytes)
                             }
                             "NSDate" -> {
                                 val timestamp = (thing.values[BPAsciiString("NS.time")]!! as BPReal).value

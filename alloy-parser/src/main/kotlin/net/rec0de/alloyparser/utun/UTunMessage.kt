@@ -127,6 +127,8 @@ abstract class UTunMessage(val sequence: Int) {
 
     abstract fun toBytes(): ByteArray
 
+    open fun toStringShort() = toString()
+
     protected fun baseHeaderBytes(length: Int, type: Int): ByteArray {
         val header = ByteBuffer.allocate(9)
         header.put(type.toByte())

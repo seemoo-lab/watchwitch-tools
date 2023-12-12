@@ -1,29 +1,41 @@
 package net.rec0de.alloyparser
 
-import net.rec0de.alloyparser.bulletin.BulletinRequest
+import net.rec0de.alloyparser.bulletin.*
 import net.rec0de.alloyparser.health.NanoSyncMessage
 import net.rec0de.alloyparser.utun.*
 import java.io.File
 import java.nio.ByteBuffer
 import java.security.MessageDigest
+import kotlin.math.roundToInt
 
 
 val topicMap = mutableMapOf<Int,String>()
 val aovercLookup = mutableMapOf<String,ByteArray>()
-
 val digest = MessageDigest.getInstance("SHA-256")
 
-fun main(args: Array<String>) {
+var resourceTransferReassemblyBuffer: ByteArray = byteArrayOf()
+var resourceTransferSize = 0
+var resourceFileCounter = 1
+var resourceTransferFilename = ""
 
+var printShort = false
+var muteControl = false
+
+fun main(args: Array<String>) {
+    
     if(args.isEmpty()) {
         println("Alloy parser expects at least one argument")
-        println("Usage: alloy-parser [--include=\"topicA,topicB\"] [--exclude=\"topicC,topicD\"] path/to/ids/logfile")
+        println("Usage: alloy-parser [--include=\"topicA,topicB\"] [--exclude=\"topicC,topicD\"] [--short] [--noctrl] path/to/ids/logfile")
+        println("--short suppresses printing of unparsed message payloads")
         return
     }
 
     val include = args.filter { it.startsWith("--include=") }.map { it.removePrefix("--include=").removePrefix("\"").removeSuffix("\"") }.flatMap { it.split(",") }
     val exclude = args.filter { it.startsWith("--exclude=") }.map { it.removePrefix("--exclude=").removePrefix("\"").removeSuffix("\"") }.flatMap { it.split(",") }
+    printShort = args.any{ it.startsWith("--short")}
+    muteControl = args.any{ it.startsWith("--noctrl")}
     val path = args.first { !it.startsWith("--") }
+
 
     if(include.isNotEmpty())
         println("Showing only messages for topics: ${include.joinToString(", ")}")
@@ -101,6 +113,8 @@ fun readLine(line: String, include: Set<String>, exclude: Set<String>) {
 }
 
 fun readControl(incoming: Boolean, bytes: ByteArray) {
+    if(muteControl)
+        return
     val parsed = UTunControlMessage.parse(bytes)
     val direction = if(incoming) "rcv" else "snd"
     println("$direction ctrl $parsed")
@@ -139,15 +153,22 @@ fun readUTun(incoming: Boolean, opcode: Int, bytes: ByteArray, include: Set<Stri
     else if(exclude.isNotEmpty() && exclude.contains(topic))
         return
 
-    println("$direction $parsed")
+    if(printShort)
+        println("$direction ${parsed.toStringShort()}")
+    else
+        println("$direction $parsed")
 
     when(parsed) {
+        is ResourceTransferMessage -> handleResourceTransfer(parsed)
         is DataMessage -> logDataMessage(parsed)
         is ProtobufMessage -> logProtobufMessage(parsed)
     }
+
+    println()
 }
 
 fun logProtobufMessage(parsed: ProtobufMessage) {
+
     // for some reason Protobuf messages sometimes carry, guess what, bplists
     if(BPListParser.bufferIsBPList(parsed.payload)) {
         val bpcontent = BPListParser().parse(parsed.payload)
@@ -159,31 +180,62 @@ fun logProtobufMessage(parsed: ProtobufMessage) {
             println(bpcontent)
     }
     else {
-        // messages (esp bulletindistributor) sometimes have a trailer that is also protobuf with the length encoded in the last two bytes
-        val len = UInt.fromBytesLittle(parsed.payload.fromIndex(parsed.payload.size-2)).toInt()
-        val pb: ProtoBuf
-        if(len < parsed.payload.size - 2 && len < 100) {
-            val endIndex = parsed.payload.size - 2
-            val startIndex = endIndex - len
-            val potentialTrailer = parsed.payload.sliceArray(startIndex until endIndex)
-            val rest = try {
-                val parsedTrailer = ProtobufParser().parse(potentialTrailer)
-                println("trailer: $parsedTrailer")
-                parsed.payload.sliceArray(0 until startIndex)
-            }
-            catch (e: Exception) {
-                parsed.payload
-            }
-            pb = ProtobufParser().parse(rest)
-        }
-        else
-            pb = ProtobufParser().parse(parsed.payload)
+        try {
+            // messages (esp bulletindistributor) sometimes have a trailer that is also protobuf with the length encoded in the last two bytes
+            val len = UInt.fromBytesLittle(parsed.payload.fromIndex(parsed.payload.size - 2)).toInt()
+            val pb: ProtoBuf
+            if (len <= parsed.payload.size - 2 && len < 100) {
+                val endIndex = parsed.payload.size - 2
+                val startIndex = endIndex - len
+                val potentialTrailer = parsed.payload.sliceArray(startIndex until endIndex)
+                val rest = try {
+                    val parsedTrailer = ProtobufParser().parse(potentialTrailer)
+                    println("trailer: $parsedTrailer")
+                    parsed.payload.sliceArray(0 until startIndex)
+                } catch (e: Exception) {
+                    parsed.payload
+                }
+                pb = ProtobufParser().parse(rest)
+            } else
+                pb = ProtobufParser().parse(parsed.payload)
 
-        if(parsed.topic == "com.apple.private.alloy.bulletindistributor" && pb.readOptionalSinglet(1) is ProtoBuf) {
-            println(BulletinRequest.fromSafePB(pb))
+            if (parsed.topic != null && parsed.topic!!.startsWith("com.apple.private.alloy.bulletindistributor")) {
+                when (parsed.type) {
+                    1 -> println(BulletinRequest.fromSafePB(pb))
+                    2 -> println(RemoveBulletinRequest.fromSafePB(pb)) // for some reason remove bulletin requests use type 2 and 10?
+                    3 -> println(AddBulletinSummaryRequest.fromSafePB(pb))
+                    4 -> println(CancelBulletinRequest.fromSafePB(pb))
+                    5 -> println(AcknowledgeActionRequest.fromSafePB(pb))
+                    6 -> println(SnoozeActionRequest.fromSafePB(pb))
+                    7 -> println(SupplementaryActionRequest.fromSafePB(pb))
+                    8 -> println(DismissActionRequest.fromSafePB(pb))
+                    9 -> println(DidPlayLightsAndSirens.fromSafePB(pb))
+                    10 -> println(RemoveBulletinRequest.fromSafePB(pb))
+                    12 -> println(AckInitialSequenceNumberRequest.fromSafePB(pb))
+                    13 -> if(parsed.isResponse == 1)
+                            println("SetSectionInfoResponse $pb")
+                        else
+                            println(SetSectionInfoRequest.fromSafePB(pb))
+                    14 -> if(parsed.isResponse == 1)
+                        println("SetSectionSubtypeParametersIconResponse $pb")
+                    else
+                        println(SetSectionSubtypeParametersIconRequest.fromSafePB(pb))
+                    15 -> println(UpdateBulletinListRequest.fromSafePB(pb))
+                    16 -> println("ShouldSuppressLightsAndSirensRequest $pb")
+                    17 -> println("PairedDeviceReady $pb")
+                    18 -> println(WillSendLightsAndSirens.fromSafePB(pb))
+                    19 -> println(RemoveSectionRequest.fromSafePB(pb))
+                    20 -> println(SetNotificationsAlertLevelRequest.fromSafePB(pb))
+                    21 -> println(SetNotificationsGroupingRequest.fromSafePB(pb))
+                    22 -> println(SetNotificationsSoundRequest.fromSafePB(pb))
+                    23 -> println(SetNotificationsCriticalAlertRequest.fromSafePB(pb))
+                    24 -> println(SetRemoteGlobalSpokenSettingEnabledRequest.fromSafePB(pb))
+                    else -> println(pb)
+                }
+            } else
+                println(pb)
         }
-        else
-            println(pb)
+        catch(e: Exception) { }
     }
 }
 
@@ -229,7 +281,9 @@ fun logDataMessage(parsed: DataMessage){
                 try {
                     println(ProtobufParser().parse(parsed.payload.fromIndex(3)).toString())
                 }
-                catch(_: Exception) {}
+                catch(_: Exception) {
+                    println(parsed.payload.hex())
+                }
             }
         }
     }
@@ -245,5 +299,50 @@ fun tryDecrypt(msg: ByteArray): ByteArray? {
     else {
         val bpcontent = BPListParser().parse(msg)
         Decryptor.decrypt(bpcontent as BPDict)
+    }
+}
+
+fun handleResourceTransfer(msg: ResourceTransferMessage) {
+    // first message of transfer?
+    if(msg.payload[0].toInt() == 1) {
+        val body = msg.payload.fromIndex(1)
+        val content = if(GzipDecoder.bufferIsGzipCompressed(body)) GzipDecoder.inflate(body) else body
+        val bp = BPListParser(nestedDecode = false).parse(content) as BPDict
+
+        val totalBytes = (bp.values[BPAsciiString("ids-message-resource-transfer-total-bytes")]!! as BPInt).value.toInt()
+        val file = (bp.values[BPAsciiString("ids-message-resource-transfer-url")]!! as BPAsciiString).value
+
+        val firstChunk = if(totalBytes == 0) byteArrayOf() else (bp.values[BPAsciiString("ids-message-resource-transfer-data")]!! as BPData).value
+        resourceTransferReassemblyBuffer = firstChunk
+        resourceTransferSize = totalBytes
+        resourceTransferFilename = file.split("/").last()
+
+        println("Resource transfer of $totalBytes bytes for \"$file\"")
+        val percent = if(totalBytes == 0) 100.0 else (((resourceTransferReassemblyBuffer.size.toDouble() / resourceTransferSize)*1000).roundToInt().toDouble())/10
+        print("Got ${resourceTransferReassemblyBuffer.size}/$resourceTransferSize ($percent%) bytes")
+    }
+    else {
+        val offset = ULong.fromBytesBig(msg.payload.sliceArray(0 until 8)).toInt()
+        val body = msg.payload.fromIndex(8)
+        val content = if(GzipDecoder.bufferIsGzipCompressed(body)) GzipDecoder.inflate(body) else body
+
+
+        if(offset != resourceTransferReassemblyBuffer.size) {
+            println("Resource transfer chunk length ${content.size} at offset $offset")
+            println("Reassembly buffer mismatch")
+        }
+        else {
+            resourceTransferReassemblyBuffer += content
+            val percent = (((resourceTransferReassemblyBuffer.size.toDouble() / resourceTransferSize)*1000).roundToInt().toDouble())/10
+            println("Got ${resourceTransferReassemblyBuffer.size}/$resourceTransferSize ($percent%) bytes")
+        }
+    }
+
+    if(resourceTransferReassemblyBuffer.size == resourceTransferSize) {
+        val filename = "alloyResourceTransfer-$resourceFileCounter-$resourceTransferFilename"
+        println("Resource transfer complete! Writing contents to '$filename'")
+        File(filename).writeBytes(resourceTransferReassemblyBuffer)
+        resourceTransferReassemblyBuffer = byteArrayOf()
+        resourceFileCounter += 1
     }
 }

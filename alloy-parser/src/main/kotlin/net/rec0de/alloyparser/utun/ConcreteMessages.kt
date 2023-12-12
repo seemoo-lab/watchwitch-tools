@@ -26,7 +26,7 @@ open class DataMessage(
             // gzip compressed data can appear here with no correlation to the 'compressed' flag
             val rest = if(GzipDecoder.bufferIsGzipCompressed(commonData.second)) GzipDecoder.inflate(commonData.second) else commonData.second
 
-            return DataMessage(
+            val msg = DataMessage(
                 c.sequence,
                 c.streamID,
                 c.flags,
@@ -36,11 +36,16 @@ open class DataMessage(
                 c.expiryDate,
                 rest
             )
+            msg.actuallyCompressed = GzipDecoder.bufferIsGzipCompressed(commonData.second)
+            return msg
         }
     }
 
+    private var actuallyCompressed: Boolean = false
+
     override fun toBytes(): ByteArray = wrapPayloadWithCommonFields(payload, 0x00)
-    override fun toString() = "$name(seq $sequence stream $streamID, flags 0x${flags.toString(16)}, compressed? $compressed uuid $messageUUID, responseID $responseIdentifier, topic $topic, expires $normalizedExpiryDate, payload ${payload.hex()})"
+    override fun toStringShort() = "$name(seq $sequence stream $streamID, flags 0x${flags.toString(16)}, compressed? $actuallyCompressed uuid $messageUUID, responseID $responseIdentifier, topic $topic, expires $normalizedExpiryDate)"
+    override fun toString() = "$name(seq $sequence stream $streamID, flags 0x${flags.toString(16)}, compressed? $actuallyCompressed uuid $messageUUID, responseID $responseIdentifier, topic $topic, expires $normalizedExpiryDate, payload ${payload.hex()})"
 }
 
 open class AckMessage(sequence: Int) : UTunMessage(sequence) {
@@ -88,9 +93,13 @@ class ProtobufMessage(sequence: Int, streamID: Int, flags: Int, responseIdentifi
             // gzip compressed data can appear here with no correlation to the 'compressed' flag
             val uncompressed = if(GzipDecoder.bufferIsGzipCompressed(payload)) GzipDecoder.inflate(payload) else payload
 
-            return ProtobufMessage(c.sequence, c.streamID, c.flags, c.responseIdentifier, c.messageUUID, c.topic, c.expiryDate, type, isResponse, uncompressed)
+            val msg = ProtobufMessage(c.sequence, c.streamID, c.flags, c.responseIdentifier, c.messageUUID, c.topic, c.expiryDate, type, isResponse, uncompressed)
+            msg.actuallyCompressed = GzipDecoder.bufferIsGzipCompressed(payload)
+            return msg
         }
     }
+
+    var actuallyCompressed: Boolean = false
 
     override fun toBytes(): ByteArray {
         val protobufHeader = ByteBuffer.allocate(2 + 2 + 4)
@@ -100,7 +109,8 @@ class ProtobufMessage(sequence: Int, streamID: Int, flags: Int, responseIdentifi
         return wrapPayloadWithCommonFields(protobufHeader.array() + payload, 0x03)
     }
 
-    override fun toString() = "ProtobufMessage(seq $sequence stream $streamID, flags 0x${flags.toString(16)}, uuid $messageUUID, responseID $responseIdentifier, topic $topic, expires $normalizedExpiryDate, type $type, isResponse $isResponse payload ${payload.hex()})"
+    override fun toStringShort() = "ProtobufMessage(seq $sequence stream $streamID, flags 0x${flags.toString(16)}, compressed? $actuallyCompressed uuid $messageUUID, responseID $responseIdentifier, topic $topic, expires $normalizedExpiryDate, type $type, isResponse $isResponse)"
+    override fun toString() = "ProtobufMessage(seq $sequence stream $streamID, flags 0x${flags.toString(16)}, compressed? $actuallyCompressed uuid $messageUUID, responseID $responseIdentifier, topic $topic, expires $normalizedExpiryDate, type $type, isResponse $isResponse payload ${payload.hex()})"
 }
 
 class Handshake(sequence: Int): UTunMessage(sequence) {
