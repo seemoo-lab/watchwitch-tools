@@ -1,11 +1,16 @@
 package net.rec0de.alloyparser
 
 import net.rec0de.alloyparser.bulletin.*
+import net.rec0de.alloyparser.camera.CameraRequest
+import net.rec0de.alloyparser.camera.CameraResponse
 import net.rec0de.alloyparser.health.NanoSyncMessage
 import net.rec0de.alloyparser.utun.*
 import java.io.File
 import java.nio.ByteBuffer
 import java.security.MessageDigest
+import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
 import kotlin.math.roundToInt
 
 
@@ -22,7 +27,7 @@ var printShort = false
 var muteControl = false
 
 fun main(args: Array<String>) {
-    
+
     if(args.isEmpty()) {
         println("Alloy parser expects at least one argument")
         println("Usage: alloy-parser [--include=\"topicA,topicB\"] [--exclude=\"topicC,topicD\"] [--short] [--noctrl] path/to/ids/logfile")
@@ -30,8 +35,12 @@ fun main(args: Array<String>) {
         return
     }
 
-    val include = args.filter { it.startsWith("--include=") }.map { it.removePrefix("--include=").removePrefix("\"").removeSuffix("\"") }.flatMap { it.split(",") }
-    val exclude = args.filter { it.startsWith("--exclude=") }.map { it.removePrefix("--exclude=").removePrefix("\"").removeSuffix("\"") }.flatMap { it.split(",") }
+    val include = args.filter { it.startsWith("--include=") }.map { it.removePrefix("--include=").removePrefix("\"").removeSuffix("\"") }.flatMap { it.split(",") }.map {
+        if(it.startsWith("com.apple.")) it else "com.apple.private.alloy.$it"
+    }
+    val exclude = args.filter { it.startsWith("--exclude=") }.map { it.removePrefix("--exclude=").removePrefix("\"").removeSuffix("\"") }.flatMap { it.split(",") }.map {
+        if(it.startsWith("com.apple.")) it else "com.apple.private.alloy.$it"
+    }
     printShort = args.any{ it.startsWith("--short")}
     muteControl = args.any{ it.startsWith("--noctrl")}
     val path = args.first { !it.startsWith("--") }
@@ -240,7 +249,19 @@ fun logProtobufMessage(parsed: ProtobufMessage) {
 }
 
 fun logDataMessage(parsed: DataMessage){
-    if(BPListParser.bufferIsBPList(parsed.payload)) {
+    if (parsed.topic != null && parsed.topic!!.startsWith("com.apple.private.alloy.camera.proxy")) {
+        // CameraRequest
+        if(parsed.responseIdentifier == null) {
+            val request = CameraRequest.parse(parsed.payload)
+            println(request)
+        }
+        // CameraResponse
+        else {
+            val response = CameraResponse.parse(parsed.payload)
+            println(response)
+        }
+    }
+    else if(BPListParser.bufferIsBPList(parsed.payload)) {
         val bpcontent = BPListParser().parse(parsed.payload)
         if(Decryptor.isEncryptedMessage(bpcontent)) {
             val plain = tryDecrypt(parsed.payload)

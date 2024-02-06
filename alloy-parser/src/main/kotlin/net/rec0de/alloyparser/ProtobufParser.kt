@@ -156,7 +156,11 @@ interface ProtoValue {
 data class ProtoBuf(val objs: Map<Int, List<ProtoValue>>, val bytes: ByteArray = byteArrayOf()) : ProtoLen(bytes) {
     override fun toString() = "Protobuf($objs)"
 
+    private val strictMode = true
+
     fun readOptionalSinglet(field: Int) : ProtoValue? {
+        if(strictMode && objs[field] != null && objs[field]!!.size > 1)
+            throw Exception("trying to read singlet from multi-value protobuf field $field: $this")
         val f = objs[field]
         return if(f == null) null else f[0]
     }
@@ -188,6 +192,10 @@ data class ProtoBuf(val objs: Map<Int, List<ProtoValue>>, val bytes: ByteArray =
 
     fun readOptDouble(field: Int) : Double? {
         return (readOptionalSinglet(field) as ProtoI64?)?.asDouble()
+    }
+
+    fun readOptFloat(field: Int) : Float? {
+        return (readOptionalSinglet(field) as ProtoI32?)?.asFloat()
     }
 
     fun readOptPB(field: Int) : ProtoBuf? {
