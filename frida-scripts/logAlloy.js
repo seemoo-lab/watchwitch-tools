@@ -7,8 +7,8 @@ const muteUTun = false
 // WILL contain potentially sensitive health information and PRIVATE RSA KEY
 const logAoverCplaintexts = true
 
-// if logging AoverC, we export the RSA private key for decryption of received A-over-C messages -- but only once
-let hasLoggedRSA = false
+// if logging AoverC, we export the RSA private key for decryption of received A-over-C messages -- but only once per key
+let loggedKey = null
 
 // Hooks:
 
@@ -205,7 +205,7 @@ Interceptor.attach(rsa, {
 
     //console.log(`ccrsa_priv_crypt ${key} ${out} ${inp}`)
 
-    if(logAoverCplaintexts && !hasLoggedRSA) {
+    if(logAoverCplaintexts) {
       const getEncodedSize = new NativeFunction(encodePrivKeySize, 'int', ['pointer'])
       const encodePriv = new NativeFunction(encodePrivKey, 'pointer', ['pointer', 'pointer', 'pointer'])
 
@@ -213,8 +213,12 @@ Interceptor.attach(rsa, {
       const buf = Memory.alloc(size)
 
       encodePriv(key, buf, buf.add(size))
-      console.log("aovercrsa " + readHex(buf, size))
-      hasLoggedRSA = true
+      const encoded = readHex(buf, size)
+
+      if(encoded != loggedKey) {
+        console.log("aovercrsa " + encoded)
+        loggedKey = encoded
+      }
     }
   },
   
