@@ -33,6 +33,8 @@ aclRcvFragBuffer = ""
 aclSndFragBuffer = ""
 NRLPRcvFragBuffer = ""
 NRLPSndFragBuffer = ""
+CLinkSndFragBuffer = ""
+CLinkRcvFragBuffer = ""
 NRLPPacketTypes = [0x02, 0x03, 0x04, 0x05, 0x63, 0x64, 0x65, 0x68, 0x69] # excluding 0x00 to avoid false positive detections
 
 # ATT opcodes
@@ -162,7 +164,7 @@ def analyzePacket(direction, payload, protocolStack = []):
             processParsedPacket(direction, protocolStack + [proto], data)
 
 def processParsedPacket(direction, protocolStack, payload):
-    if len(payload) > 2 and len(protocolStack) > 0 and (not unexplainedOnly or protocolStack[-1].startswith("unknw")):
+    if len(protocolStack) > 0 and (not unexplainedOnly or protocolStack[-1].startswith("unknw")) and (not protocolStack[-1].startswith("ESP")) and (not protocolStack[-1].startswith("ATT")):
         print(direction, "->".join(protocolStack), payload.hex())
 
     # archive unexplained payloads
@@ -197,7 +199,7 @@ def on_message_IKE(message, data):
 # returns a list of packets contained in the given payload, with annotated protocol information
 # format: (detected protocol, effective payload without headers, flag: analyze payload?)
 def detectProtocol(direction, payload, protocolStack):
-    global spis, NRLPRcvFragBuffer, NRLPSndFragBuffer, NRLPPacketTypes
+    global spis, NRLPRcvFragBuffer, NRLPSndFragBuffer, CLinkRcvFragBuffer, CLinkSndFragBuffer, NRLPPacketTypes
     payloadLen = len(payload)
 
     # check if reserved bits of common sequence number scheme are all zero
@@ -238,19 +240,27 @@ def detectProtocol(direction, payload, protocolStack):
 
         proto = Template("MagnetS(op=${op}, len=${length})").substitute(op=phex(opcode), length=length) + " " + logMagnet(opcode, payload[4:])
         return [(proto, payload[2:], False)]
-    # NRLP
-    elif payloadLen > 7 and matchesCommonSeqAck and int.from_bytes(payload[3:5], byteorder="big") == payloadLen - 5 - 2: # 5 byte header, 2 byte checksum (?)
+    # SEQACK, special ack or something?
+    elif payloadLen == 2 and payload[0] == 1 and len(protocolStack) == 1:
+        ack = payload[1]
+        return [("SEQACK(special, ?{})".format(ack), bytes(), False)]
+    # SEQACK
+    elif payloadLen > 2 and matchesCommonSeqAck and len(protocolStack) == 1 and ("CLink" in protocolStack[0] or "BT.TS" in protocolStack[0] or "terminusLink" in protocolStack[0]):
         seq = payload[0] >> 1
-        #ack = payload[1]
-        typ = payload[2]
-        lng = int.from_bytes(payload[3:5], byteorder="big")
+        ack = payload[1]
+        proto = "SEQACK(#{} ?{})".format(seq, ack)
+        return [(proto, payload[2:], True)]
+    # NRLP
+    elif payloadLen > 5 and int.from_bytes(payload[1:3], byteorder="big") == payloadLen - 3 - 2: # 3 byte header, 2 byte checksum (?)
+        typ = payload[0]
+        lng = int.from_bytes(payload[1:3], byteorder="big")
         checksum = payload[-2:]
 
         if collectData and not (typ in [0x04, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69]):
             archiver.logNRLP(direction, payload)
 
-        proto = Template("NRLP(t=${typ}, #${seq})").substitute(seq=seq, typ=phex(typ))
-        data = payload[5:-2]
+        proto = Template("NRLP(t=${typ})").substitute(typ=phex(typ))
+        data = payload[3:-2]
         return [(proto, data, True)]
     # ESP
     elif matchesKnownESP(payload):
@@ -277,11 +287,11 @@ def detectProtocol(direction, payload, protocolStack):
 
         return [("6LowPAN("+header.hex()+")", data, True)]
     # NRLink Prelude
-    elif payload[2:10].hex() == "5445524d494e5553":
-        terminusProtocolVersion = payload[10]
-        pairingState = payload[11]
-        length = int.from_bytes(payload[12:14], byteorder="big")
-        data = payload[14:-2]
+    elif payload[0:8].hex() == "5445524d494e5553":
+        terminusProtocolVersion = payload[8]
+        pairingState = payload[9]
+        length = int.from_bytes(payload[10:12], byteorder="big")
+        data = payload[12:-2]
         proto = Template("NRLinkPrelude(v=${version}, pairing=${pair}, l=${len})").substitute(version=terminusProtocolVersion, pair=pairingState, len=length)
 
         if collectData:
@@ -289,21 +299,49 @@ def detectProtocol(direction, payload, protocolStack):
 
         return [(proto, data, False)]
     # CLink and CLinkHP
-    elif payloadLen > 5 and len(protocolStack) == 1 and "CLink" in protocolStack[0]:
+    elif payloadLen > 3 and "CLink" in protocolStack[0]:
         if collectData:
             archiver.logClink(direction, payload)
-        sid = phex(int.from_bytes(payload[2:4], byteorder="little"), 4)
-        length = int.from_bytes(payload[4:6], byteorder="big")
-        proto = Template("CLink(id=${sid},l=${len})").substitute(sid=sid,len=length)
-        return [(proto, payload[6:], False)]
+        
+        maybeLen = int.from_bytes(payload[2:4], byteorder="big")
+        fragBuffer = CLinkSndFragBuffer if direction == "snd" else CLinkRcvFragBuffer
+
+        # full CLink packet in a single frame
+        if maybeLen == payloadLen - 4:
+            opcode = phex(int.from_bytes(payload[0:2], byteorder="little"), 4)
+            length = int.from_bytes(payload[2:4], byteorder="big")
+            proto = Template("CLink(op=${sid},l=${len})").substitute(sid=opcode,len=length)
+            return [(proto, payload[4:], False)]
+        # CLink packet, first fragment (assume plausible length)
+        elif maybeLen > len(payload) - 4 and maybeLen < 4000 and len(fragBuffer) == 0:
+            opcode = phex(int.from_bytes(payload[0:2], byteorder="little"), 4)
+            length = int.from_bytes(payload[2:4], byteorder="big")
+            proto = Template("CLinkFF(op=${sid},l=${len})").substitute(sid=opcode,len=length)
+            if direction == "snd":
+                CLinkSndFragBuffer = payload
+            else:
+                CLinkRcvFragBuffer = payload
+            return [("CLinkFragment", bytes(), False)] # we'll handle the complete packet once we have it
+        # CLink, continuing fragment (for now, assume packets only ever split into two frames, not more)
+        elif len(fragBuffer) > 0:
+            fullPkg = ""
+            if direction == "snd":
+                fullPkg = CLinkSndFragBuffer + payload
+                CLinkSndFragBuffer = ""
+            else:
+                fullPkg = CLinkRcvFragBuffer + payload
+                CLinkRcvFragBuffer = ""
+            return detectProtocol(direction, fullPkg, protocolStack)
+        else:
+            return [("unknw", payload, False)]
     # com.apple.BT.TS
-    elif payloadLen > 3 and len(protocolStack) == 1 and "BT.TS" in protocolStack[0]:
+    elif payloadLen > 1 and len(protocolStack) == 2 and "BT.TS" in protocolStack[0]:
         if collectData:
             archiver.logBTTS(direction, payload)
-        typ = payload[2]
-        length = payload[3]
+        typ = payload[0]
+        length = payload[1]
         proto = Template("BT.TS(t=${tpe},l=${len})").substitute(tpe=hex(typ),len=length)
-        return [(proto, payload[3:], False)]
+        return [(proto, payload[1:], False)]
     # IKE with unknown cookie
     elif matchesUnknownIKE(payload, protocolStack):
         return handleIKE(payload)
@@ -312,17 +350,15 @@ def detectProtocol(direction, payload, protocolStack):
         return handleESP(payload)
     # NRLP, fragmented (first fragment)
     # Heuristic: reserved bits in sequence numbers not set, length looks 'reasonable', type is one of the known packet types
-    elif payloadLen > 7 and matchesCommonSeqAck and int.from_bytes(payload[3:5], byteorder="big") < 4096 and payload[2] in NRLPPacketTypes:
-        effectivePayload = payload[2:]
+    elif payloadLen > 5 and int.from_bytes(payload[1:3], byteorder="big") < 4096 and payload[0] in NRLPPacketTypes and "terminusLink" in protocolStack[0]:
+        effectivePayload = payload
         lng = int.from_bytes(effectivePayload[1:3], byteorder="big")
-        seq = payload[0] >> 1
-
         containedPackets = []
 
         # full first packet is in this frame, alongside others
         while lng <= len(effectivePayload) - 3 and len(effectivePayload) > 5:
             typ = effectivePayload[0]
-            proto = Template("NRLP(t=${typ}, l=${lng})").substitute(typ=phex(typ), lng=lng)
+            proto = Template("NRLP(t=${typ})").substitute(typ=phex(typ))
 
             if collectData and not (typ in [0x04, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69]):
                 archiver.logNRLP(direction, effectivePayload[0:lng+3])
@@ -341,15 +377,16 @@ def detectProtocol(direction, payload, protocolStack):
             else:
                 NRLPRcvFragBuffer = effectivePayload
 
-        return containedPackets
+        return containedPackets if len(containedPackets) > 0 else [("NRLPFragment", bytes(), False)]
     # NRLP, fragmented (continuing fragment)
-    # Heuristic: reserved bits in sequence numbers not set, packet is not super short, matching buffer has start fragment
-    elif payloadLen > 32 and int.from_bytes(payload[0:2], byteorder="big") & 0b10000000111000000 == 0 and (direction == "snd" and len(NRLPSndFragBuffer) > 0 or direction == "rcv" and len(NRLPRcvFragBuffer) > 0):
+    # Heuristic: packet is not super short, matching buffer has start fragment
+    elif payloadLen > 32 and (direction == "snd" and len(NRLPSndFragBuffer) > 0 or direction == "rcv" and len(NRLPRcvFragBuffer) > 0) and "terminusLink" in protocolStack[0]:
+       
         if direction == "snd":
-            effectivePayload = bytes.fromhex("0000") + NRLPSndFragBuffer + payload[2:] # prepend synthetic sequence numbers
+            effectivePayload = NRLPSndFragBuffer + payload[2:]
             NRLPSndFragBuffer = ""
         else:
-            effectivePayload = bytes.fromhex("0000") + NRLPRcvFragBuffer + payload[2:] # prepend synthetic sequence numbers
+            effectivePayload = NRLPRcvFragBuffer + payload[2:]
             NRLPRcvFragBuffer = ""
         return detectProtocol(direction, effectivePayload, protocolStack)
 
