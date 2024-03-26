@@ -76,6 +76,10 @@ Usage:
 
 The Alloy parser is a subset of the WatchWitch Android source code repackaged to allow analyzing Alloy logs on a computer. It is designed to read the logfiles produced by the `logAlloy.js` frida script and will automatically detect A-over-C plaintexts and keys included in these logs and provide decryption for the corresponding messages.
 
+It will also process data transmitted from or to the watch using *Resource Transfer Messages*. These reassembled payloads of these messages will be saved as files named `alloyResourceTransfer-[id]-[originalFileName]`.
+
+To suppress printing of Alloy control messages, add the flag `--noctrl`. To suppress printing of unparsed message payloads for better readability, add the flag `--short`. Alloy topics may be filtered using `--include` and `--exclude` as shown below. You may omit the common prefix `com.apple.private.alloy.` when filtering by topic. Note that for filtering to work, you typically need to have a complete log starting from watch boot. You may otherwise manually specify stream-to-topic mappings by including mapping hints of the format `map <stream> <topic>` in your input file, e.g. `map 33 com.apple.private.alloy.coreduet`.
+
 Usage:
 
 ```
