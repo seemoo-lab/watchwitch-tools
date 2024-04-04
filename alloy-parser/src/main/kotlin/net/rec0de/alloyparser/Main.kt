@@ -4,6 +4,9 @@ import net.rec0de.alloyparser.bulletin.*
 import net.rec0de.alloyparser.camera.CameraRequest
 import net.rec0de.alloyparser.camera.CameraResponse
 import net.rec0de.alloyparser.health.NanoSyncMessage
+import net.rec0de.alloyparser.preferencessync.FileBackupMessage
+import net.rec0de.alloyparser.preferencessync.UserDefaultsBackupMessage
+import net.rec0de.alloyparser.preferencessync.UserDefaultsMessage
 import net.rec0de.alloyparser.utun.*
 import java.io.File
 import java.nio.ByteBuffer
@@ -44,7 +47,6 @@ fun main(args: Array<String>) {
     printShort = args.any{ it.startsWith("--short")}
     muteControl = args.any{ it.startsWith("--noctrl")}
     val path = args.first { !it.startsWith("--") }
-
 
     if(include.isNotEmpty())
         println("Showing only messages for topics: ${include.joinToString(", ")}")
@@ -139,19 +141,32 @@ fun readUTun(incoming: Boolean, opcode: Int, bytes: ByteArray, include: Set<Stri
 
     when(parsed) {
         is ServiceMapMessage -> {
+            println("Mapping topic ${parsed.serviceName} to stream ${parsed.streamID} (service map)")
             topicMap[parsed.streamID] = parsed.serviceName
         }
         is DataMessage -> {
-            if(parsed.hasTopic)
+            if(parsed.hasTopic && !topicMap.contains(parsed.streamID)) {
+                println("mapping topic ${parsed.topic} to stream ${parsed.streamID} (message with topic)")
                 topicMap[parsed.streamID] = parsed.topic!!
-            else
+            }
+            else if(parsed.hasTopic && parsed.topic != topicMap[parsed.streamID]) {
+                println("message on stream ${parsed.streamID} should be topic ${topicMap[parsed.streamID]} but is ${parsed.topic}")
+            }
+            else if(topicMap.contains(parsed.streamID)) {
                 parsed.topic = topicMap[parsed.streamID]
+            }
         }
         is ProtobufMessage -> {
-            if(parsed.hasTopic)
+            if(parsed.hasTopic && !topicMap.contains(parsed.streamID)) {
+                println("mapping topic ${parsed.topic} to stream ${parsed.streamID} (message with topic)")
                 topicMap[parsed.streamID] = parsed.topic!!
-            else
+            }
+            else if(parsed.hasTopic && parsed.topic != topicMap[parsed.streamID]) {
+                println("message on stream ${parsed.streamID} should be topic ${topicMap[parsed.streamID]} but is ${parsed.topic}")
+            }
+            else if(topicMap.contains(parsed.streamID)) {
                 parsed.topic = topicMap[parsed.streamID]
+            }
         }
     }
 
@@ -190,10 +205,16 @@ fun logProtobufMessage(parsed: ProtobufMessage) {
     }
     else {
         try {
-            // messages (esp bulletindistributor) sometimes have a trailer that is also protobuf with the length encoded in the last two bytes
-            val len = UInt.fromBytesLittle(parsed.payload.fromIndex(parsed.payload.size - 2)).toInt()
+            // some messages claiming to be protobuf actually contain OPACK data...
+            if(parsed.topic != null && parsed.topic == "com.apple.private.alloy.sharing.paireddevice") {
+                println(OpackParser().parseTopLevel(parsed.payload))
+                return
+            }
+            
+            // messages (esp. bulletindistributor) sometimes have a trailer that is also protobuf with the length encoded in the last two bytes
+            val len = if(parsed.payload.size > 2) UInt.fromBytesLittle(parsed.payload.fromIndex(parsed.payload.size - 2)).toInt() else 0
             val pb: ProtoBuf
-            if (len <= parsed.payload.size - 2 && len < 100) {
+            if (parsed.payload.size > 2 && len <= parsed.payload.size - 2 && len < 100 && len > 2) {
                 val endIndex = parsed.payload.size - 2
                 val startIndex = endIndex - len
                 val potentialTrailer = parsed.payload.sliceArray(startIndex until endIndex)
@@ -209,6 +230,7 @@ fun logProtobufMessage(parsed: ProtobufMessage) {
                 pb = ProtobufParser().parse(parsed.payload)
 
             if (parsed.topic != null && parsed.topic!!.startsWith("com.apple.private.alloy.bulletindistributor")) {
+                println(pb)
                 when (parsed.type) {
                     1 -> println(BulletinRequest.fromSafePB(pb))
                     2 -> println(RemoveBulletinRequest.fromSafePB(pb)) // for some reason remove bulletin requests use type 2 and 10?
@@ -241,10 +263,31 @@ fun logProtobufMessage(parsed: ProtobufMessage) {
                     24 -> println(SetRemoteGlobalSpokenSettingEnabledRequest.fromSafePB(pb))
                     else -> println(pb)
                 }
-            } else
+            }
+            else if(parsed.topic != null && parsed.topic!!.startsWith("com.apple.private.alloy.preferencessync")) {
+                //println(pb)
+                when(parsed.type) {
+                    0 -> {
+                        val msg = UserDefaultsMessage.fromSafePB(pb)
+                        println(msg)
+                    }
+                    1 -> {
+                        val msg = UserDefaultsBackupMessage.fromSafePB(pb)
+                        println(msg)
+                    }
+                    2 -> {
+                        val msg = FileBackupMessage.fromSafePB(pb)
+                        println(msg)
+                    }
+                }
+            }
+            else
                 println(pb)
         }
-        catch(e: Exception) { }
+        catch(e: Exception) {
+            e.printStackTrace()
+            println(parsed.payload.hex())
+        }
     }
 }
 
@@ -278,7 +321,7 @@ fun logDataMessage(parsed: DataMessage){
                     // if we fail parsing something, print the failing protobuf for debugging and then still fail
                     println("Failed while parsing: $pb")
                     println("bytes: ${plain.hex()}")
-                    println(e.toString())
+                    e.printStackTrace()
                 }
             }
             else {

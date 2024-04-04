@@ -166,6 +166,10 @@ data class ProtoBuf(val objs: Map<Int, List<ProtoValue>>, val bytes: ByteArray =
     }
 
     fun readAssertedSinglet(field: Int) : ProtoValue {
+        if(strictMode && objs[field] != null && objs[field]!!.size > 1)
+            throw Exception("trying to read singlet from multi-value protobuf field $field: $this")
+        if(objs[field] == null)
+            throw Exception("asserted read of null protobuf field $field")
         return objs[field]!![0]
     }
 
