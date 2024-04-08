@@ -1,5 +1,6 @@
 package net.rec0de.alloyparser
 
+import net.rec0de.alloyparser.bitmage.hex
 import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream

@@ -1,6 +1,7 @@
 package net.rec0de.alloyparser.health
 
 import net.rec0de.alloyparser.*
+import net.rec0de.alloyparser.bitmage.hex
 import java.util.Date
 import java.util.UUID
 

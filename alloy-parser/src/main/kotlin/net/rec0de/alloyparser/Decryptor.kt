@@ -1,5 +1,9 @@
 package net.rec0de.alloyparser
 
+import net.rec0de.alloyparser.bitmage.ByteOrder
+import net.rec0de.alloyparser.bitmage.fromBytes
+import net.rec0de.alloyparser.bitmage.fromHex
+import net.rec0de.alloyparser.bitmage.fromIndex
 import org.bouncycastle.jce.ECNamedCurveTable
 import org.bouncycastle.jce.ECPointUtil
 import org.bouncycastle.jce.provider.BouncyCastleProvider
@@ -37,7 +41,7 @@ object Decryptor {
             null
         } else {
             // CCCryptor is initialized with zero IV in AES-CBC mode (potential issue: first block effectively ECB, IND-CPA break)
-            val iv = IvParameterSpec("00000000000000000000000000000000".hexBytes())
+            val iv = IvParameterSpec("00000000000000000000000000000000".fromHex())
             val cryptorKey = SecretKeySpec(symKey, "AES/CBC/PKCS5Padding")
             val c = Cipher.getInstance("AES/CBC/PKCS5Padding")
             c.init(Cipher.DECRYPT_MODE, cryptorKey, iv)
@@ -64,7 +68,7 @@ object Decryptor {
     fun decapsulateEkd(ekd: ByteArray): ByteArray? {
         if (ekd[0].toInt() != 0x02)
             throw Exception("Unsupported version in ekd field of AoverC encrypted message: ${ekd[0]}, expected 2")
-        val payloadLen = UInt.fromBytesBig(ekd.sliceArray(1 until 3)).toInt()
+        val payloadLen = UInt.fromBytes(ekd.sliceArray(1 until 3), ByteOrder.BIG).toInt()
         val payload = ekd.sliceArray(3 until 3 + payloadLen)
         val rest = ekd.fromIndex(3 + payloadLen)
 
@@ -111,7 +115,7 @@ object Decryptor {
         //println("pld: ${payload.hex()}")
 
         // encryption is "one-shot", always starts with 1-value counter and no nonce (bit of a questionable choice, why not ECB at this point?)
-        val iv = IvParameterSpec("00000000000000000000000000000001".hexBytes())
+        val iv = IvParameterSpec("00000000000000000000000000000001".fromHex())
         val ctrKey = SecretKeySpec(key, "AES/CTR/NoPadding")
         val c = Cipher.getInstance("AES/CTR/NoPadding")
         c.init(Cipher.DECRYPT_MODE, ctrKey, iv)

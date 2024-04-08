@@ -1,8 +1,8 @@
 package net.rec0de.alloyparser.utun
 
 import net.rec0de.alloyparser.ParseCompanion
-import net.rec0de.alloyparser.fromIndex
-import net.rec0de.alloyparser.hex
+import net.rec0de.alloyparser.bitmage.fromIndex
+import net.rec0de.alloyparser.bitmage.hex
 import java.nio.ByteBuffer
 import java.util.Date
 import java.util.UUID

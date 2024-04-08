@@ -1,6 +1,7 @@
 package net.rec0de.alloyparser.bulletin
 
 import net.rec0de.alloyparser.*
+import net.rec0de.alloyparser.bitmage.hex
 import net.rec0de.alloyparser.health.PBParsable
 import java.util.*
 

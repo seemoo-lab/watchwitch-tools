@@ -1,14 +1,13 @@
 package net.rec0de.alloyparser.camera
 
 import net.rec0de.alloyparser.*
+import net.rec0de.alloyparser.bitmage.*
 import net.rec0de.alloyparser.health.PBParsable
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 abstract class CameraRequest {
     companion object {
         fun parse(bytes: ByteArray) : CameraRequest? {
-            val type = UInt.fromBytesLittle(bytes.sliceArray(0 until 2)).toInt()
+            val type = UInt.fromBytes(bytes.sliceArray(0 until 2), ByteOrder.LITTLE).toInt()
             val pb = ProtobufParser().parse(bytes.fromIndex(3))
 
             // from NCCompanionCamera::init in companioncamerad
@@ -48,7 +47,7 @@ class OpenCameraRequest(val supportedCaptureModes: List<Int>) : CameraRequest() 
             val capModes : List<Int> = if(supportedCaptureModes is ProtoVarInt)
                     listOf(supportedCaptureModes.value.toInt())
                 else if(supportedCaptureModes is ProtoLen)
-                    supportedCaptureModes.value.toList().chunked(4).map { UInt.fromBytesBig(it.toByteArray()).toInt() }
+                    supportedCaptureModes.value.toList().chunked(4).map { Int.fromBytes(it.toByteArray(), ByteOrder.BIG) }
                 else
                     throw Exception("Unsupported capture mode enumeration: $supportedCaptureModes")
 
@@ -155,10 +154,7 @@ class SetFocusPointRequest(val points: List<Float>) : CameraRequest() {
             val points = pb.readMulti(1).flatMap {
                 val floats : List<Float> = if(it is ProtoLen) {
                     it.value.toList().chunked(4).map {
-                        val bytes = it.toByteArray()
-                        val buf = ByteBuffer.wrap(bytes)
-                        buf.order(ByteOrder.LITTLE_ENDIAN)
-                        buf.getFloat()
+                        it.toByteArray().readFloat(ByteOrder.LITTLE)
                     }
                 }
                 else if(it is ProtoI32) {

@@ -1,5 +1,8 @@
 package net.rec0de.alloyparser
 
+import net.rec0de.alloyparser.bitmage.ByteOrder
+import net.rec0de.alloyparser.bitmage.fromBytes
+import net.rec0de.alloyparser.bitmage.hex
 import java.nio.ByteBuffer
 import java.util.*
 
@@ -51,61 +54,12 @@ open class ParseCompanion {
     }
 
     protected fun readInt(bytes: ByteArray, size: Int): Int {
-        val int = UInt.fromBytesBig(bytes.sliceArray(parseOffset until parseOffset +size)).toInt()
+        val int = UInt.fromBytes(bytes.sliceArray(parseOffset until parseOffset +size), ByteOrder.BIG).toInt()
         parseOffset += size
         return int
     }
 }
 
-fun ByteArray.hex() = joinToString("") { "%02x".format(it) }
-fun ByteArray.fromIndex(i: Int) = sliceArray(i until size)
-fun String.hexBytes(): ByteArray {
-    check(length % 2 == 0) { "Must have an even length" }
-    return chunked(2)
-        .map { it.toInt(16).toByte() }
-        .toByteArray()
-}
-
-fun UInt.Companion.fromBytesSmall(bytes: ByteArray): UInt {
-    return bytes.mapIndexed { index, byte ->  byte.toUByte().toUInt() shl (index * 8)}.sum()
-}
-fun UInt.Companion.fromBytesBig(bytes: ByteArray): UInt {
-    return bytes.reversed().mapIndexed { index, byte ->  byte.toUByte().toUInt() shl (index * 8)}.sum()
-}
-
-fun ULong.Companion.fromBytesBig(bytes: ByteArray): ULong {
-    return bytes.reversed().mapIndexed { index, byte ->  byte.toUByte().toULong() shl (index * 8)}.sum()
-}
-
-fun ULong.Companion.fromBytesLittle(bytes: ByteArray): ULong {
-    return bytes.mapIndexed { index, byte ->  byte.toUByte().toULong() shl (index * 8)}.sum()
-}
-
-fun Int.toBytesBig(): ByteArray {
-    return byteArrayOf((this shr 24).toByte(), (this shr 16).toByte(), (this shr 8).toByte(), (this shr 0).toByte())
-}
-
-fun UInt.Companion.fromBytesLittle(bytes: ByteArray): UInt {
-    return bytes.mapIndexed { index, byte ->  byte.toUByte().toUInt() shl (index * 8)}.sum()
-}
-
-fun Long.doubleFromLongBytes(): Double {
-    val b = ByteBuffer.allocate(8)
-    b.putLong(this)
-    return b.getDouble(0)
-}
-
-fun Double.longBytesFromDouble(): Long {
-    val b = ByteBuffer.allocate(8)
-    b.putDouble(this)
-    return b.getLong(0)
-}
-
-fun Int.floatFromIntBytes(): Float {
-    val b = ByteBuffer.allocate(4)
-    b.putInt(this)
-    return b.getFloat(0)
-}
 
 fun Date.toAppleTimestamp(): Double {
     // NSDate timestamps encode time as seconds since Jan 01 2001 with millisecond precision as doubles

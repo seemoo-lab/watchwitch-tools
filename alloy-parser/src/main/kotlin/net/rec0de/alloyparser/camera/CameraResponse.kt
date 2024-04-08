@@ -1,12 +1,15 @@
 package net.rec0de.alloyparser.camera
 
 import net.rec0de.alloyparser.*
+import net.rec0de.alloyparser.bitmage.ByteOrder
+import net.rec0de.alloyparser.bitmage.fromBytes
+import net.rec0de.alloyparser.bitmage.fromIndex
 import net.rec0de.alloyparser.health.PBParsable
 
 abstract class CameraResponse {
     companion object {
         fun parse(bytes: ByteArray) : CameraResponse? {
-            val type = UInt.fromBytesLittle(bytes.sliceArray(0 until 2)).toInt()
+            val type = UInt.fromBytes(bytes.sliceArray(0 until 2), ByteOrder.LITTLE).toInt()
             val pb = ProtobufParser().parse(bytes.fromIndex(2))
 
             // from NCCompanionCamera::init in companioncamerad

@@ -1,5 +1,7 @@
 package net.rec0de.alloyparser
 
+import net.rec0de.alloyparser.bitmage.ByteOrder
+import net.rec0de.alloyparser.bitmage.fromBytes
 import java.util.Date
 
 class KeyedArchiveDecoder {
@@ -18,7 +20,7 @@ class KeyedArchiveDecoder {
 
         fun decode(data: BPDict): BPListObject {
             // get offset of the root object in the $objects list
-            val top = UInt.fromBytesBig(((data.values[topKey]!! as BPDict).values[rootKey]!! as BPUid).value).toInt()
+            val top = UInt.fromBytes(((data.values[topKey]!! as BPDict).values[rootKey]!! as BPUid).value, ByteOrder.BIG).toInt()
             val objects = data.values[objectsKey]!! as BPArray
 
             val rootObj = objects.values[top]
@@ -28,7 +30,7 @@ class KeyedArchiveDecoder {
 
         private fun optionallyResolveObjectReference(thing: CodableBPListObject, objects: BPArray): CodableBPListObject {
             return when(thing) {
-                is BPUid -> optionallyResolveObjectReference(objects.values[UInt.fromBytesBig(thing.value).toInt()], objects)
+                is BPUid -> optionallyResolveObjectReference(objects.values[UInt.fromBytes(thing.value, ByteOrder.BIG).toInt()], objects)
                 is BPArray -> BPArray(thing.values.map { optionallyResolveObjectReference(it, objects) })
                 is BPSet -> BPSet(thing.entries, thing.values.map { optionallyResolveObjectReference(it, objects) })
                 is BPDict -> {

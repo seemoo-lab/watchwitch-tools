@@ -1,6 +1,10 @@
 package net.rec0de.alloyparser.utun
 
 import net.rec0de.alloyparser.*
+import net.rec0de.alloyparser.bitmage.ByteOrder
+import net.rec0de.alloyparser.bitmage.fromBytes
+import net.rec0de.alloyparser.bitmage.fromIndex
+import net.rec0de.alloyparser.bitmage.hex
 import java.nio.ByteBuffer
 import java.util.UUID
 
@@ -92,14 +96,14 @@ class Hello(
                         // bit 0x08: dynamic services
                         // bit 0x10: unknown
 
-                        msg.capabilityFlags = ULong.fromBytesBig(bytes.sliceArray(parseOffset until parseOffset+length)).toLong()
+                        msg.capabilityFlags = Long.fromBytes(bytes.sliceArray(parseOffset until parseOffset+length), ByteOrder.BIG)
                         parseOffset += length
                     }
                     4 -> {
                         msg.serviceMinimumCompatibilityVersion = readInt(bytes, length)
                     }
                     5 -> {
-                        msg.deviceID = net.rec0de.alloyparser.Utils.uuidFromBytes(bytes.sliceArray(parseOffset until parseOffset+length))
+                        msg.deviceID = Utils.uuidFromBytes(bytes.sliceArray(parseOffset until parseOffset+length))
                         parseOffset += length
                     }
                     else -> throw Exception("Unknown data field type $type in ${bytes.fromIndex(parseOffset-3).hex()}")

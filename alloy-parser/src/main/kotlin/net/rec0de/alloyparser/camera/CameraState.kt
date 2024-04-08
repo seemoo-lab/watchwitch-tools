@@ -1,6 +1,8 @@
 package net.rec0de.alloyparser.camera
 
 import net.rec0de.alloyparser.*
+import net.rec0de.alloyparser.bitmage.ByteOrder
+import net.rec0de.alloyparser.bitmage.fromBytes
 import net.rec0de.alloyparser.health.PBParsable
 import java.nio.ByteBuffer
 import java.util.*
@@ -46,7 +48,7 @@ class CameraState(
             val supportedCaptureModes = pb.readMulti(14).flatMap {
                 val capModes : List<Int> = if(it is ProtoLen) {
                     it.value.toList().chunked(4).map {
-                        UInt.fromBytesBig(it.toByteArray()).toInt()
+                        Int.fromBytes(it.toByteArray(), ByteOrder.BIG)
                     }
                 }
                 else if(it is ProtoVarInt) {
@@ -66,7 +68,7 @@ class CameraState(
             val supportedCaptureDevices = pb.readMulti(20).flatMap {
                 val capDevices : List<Int> = if(it is ProtoLen) {
                     it.value.toList().chunked(4).map {
-                        UInt.fromBytesBig(it.toByteArray()).toInt()
+                        Int.fromBytes(it.toByteArray(), ByteOrder.BIG)
                     }
                 }
                 else if(it is ProtoVarInt) {

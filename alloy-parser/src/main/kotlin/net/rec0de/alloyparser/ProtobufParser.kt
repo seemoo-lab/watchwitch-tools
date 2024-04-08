@@ -1,8 +1,7 @@
 package net.rec0de.alloyparser
 
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import java.util.Date
+import net.rec0de.alloyparser.bitmage.*
+import java.util.*
 
 class ProtobufParser {
 
@@ -54,13 +53,13 @@ class ProtobufParser {
     private fun readI32(): ProtoI32 {
         val b = bytes.sliceArray(offset until offset+4)
         offset += 4
-        return ProtoI32(UInt.fromBytesLittle(b).toInt())
+        return ProtoI32(UInt.fromBytes(b, net.rec0de.alloyparser.bitmage.ByteOrder.LITTLE).toInt())
     }
 
     private fun readI64(): ProtoI64 {
         val b = bytes.sliceArray(offset until offset+8)
         offset += 8
-        return ProtoI64(ULong.fromBytesLittle(b).toLong())
+        return ProtoI64(ULong.fromBytes(b, net.rec0de.alloyparser.bitmage.ByteOrder.LITTLE).toLong())
     }
 
     private fun readLen(): ProtoLen {
@@ -240,28 +239,18 @@ data class ProtoI32(val value: Int) : ProtoValue {
     override val wireType = 5
     override fun toString() = "I32($value)"
 
-    override fun render(): ByteArray {
-        val buf = ByteBuffer.allocate(4)
-        buf.order(ByteOrder.LITTLE_ENDIAN)
-        buf.putInt(value)
-        return buf.array()
-    }
+    override fun render() = value.toBytes(ByteOrder.LITTLE)
 
-    fun asFloat(): Float = value.floatFromIntBytes()
+    fun asFloat(): Float = value.toBytes(ByteOrder.BIG).readFloat(ByteOrder.BIG)
 }
 
 data class ProtoI64(val value: Long) : ProtoValue {
-    constructor(value: Double) : this(value.longBytesFromDouble())
+    constructor(value: Double) : this(value.toBytes(ByteOrder.BIG).readLong(ByteOrder.BIG))
 
     override val wireType = 1
     override fun toString() = "I64($value)"
 
-    override fun render(): ByteArray {
-        val buf = ByteBuffer.allocate(8)
-        buf.order(ByteOrder.LITTLE_ENDIAN)
-        buf.putLong(value)
-        return buf.array()
-    }
+    override fun render() = value.toBytes(ByteOrder.LITTLE)
 
     /**
      * Assume this I64 value represents a double containing an NSDate timestamp (seconds since Jan 01 2001)
@@ -273,7 +262,7 @@ data class ProtoI64(val value: Long) : ProtoValue {
         return Date((timestamp*1000).toLong() + offset)
     }
 
-    fun asDouble(): Double = value.doubleFromLongBytes()
+    fun asDouble(): Double = value.toBytes(ByteOrder.BIG).readDouble(ByteOrder.BIG)
 }
 
 data class ProtoVarInt(val value: Long) : ProtoValue {

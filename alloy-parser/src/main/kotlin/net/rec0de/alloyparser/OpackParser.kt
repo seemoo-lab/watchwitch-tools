@@ -1,4 +1,8 @@
 package net.rec0de.alloyparser
+import net.rec0de.alloyparser.bitmage.ByteOrder
+import net.rec0de.alloyparser.bitmage.fromBytes
+import net.rec0de.alloyparser.bitmage.hex
+import net.rec0de.alloyparser.bitmage.readDouble
 import java.math.BigInteger
 import java.nio.ByteBuffer
 import java.util.*
@@ -55,8 +59,8 @@ class OpackParser() : ParseCompanion() {
         val type = readInt(bytes, 1)
         if(type != 0x06)
             throw Exception("Unexpected OPACK date ${bytes.hex()}")
-        val timestamp = readBytes(bytes, 8)
-        return BPDate(ULong.fromBytesBig(timestamp).toLong().doubleFromLongBytes())
+        val timestamp = readBytes(bytes, 8).readDouble(ByteOrder.BIG)
+        return BPDate(timestamp)
     }
 
     private fun parseAsInt(bytes: ByteArray): BPInt {

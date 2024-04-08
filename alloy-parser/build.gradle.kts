@@ -21,8 +21,9 @@ repositories {
 dependencies {
     // This dependency is used by the application.
     implementation("com.google.guava:guava:32.1.1-jre")
-    implementation("org.bouncycastle:bcpkix-jdk18on:1.73")
-    implementation("org.bouncycastle:bcprov-jdk18on:1.73")
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.76")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.76")
+    testImplementation(kotlin("test"))
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
