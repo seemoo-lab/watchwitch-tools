@@ -211,6 +211,10 @@ fun logProtobufMessage(parsed: ProtobufMessage) {
                 println(OpackParser().parseTopLevel(parsed.payload))
                 return
             }
+            else if(parsed.topic != null && parsed.topic == "com.apple.private.alloy.airtraffic") {
+                println(parsed.payload.decodeToString())
+                return
+            }
 
             // messages (esp. bulletindistributor) sometimes have a trailer that is also protobuf with the length encoded in the last two bytes
             val len = if(parsed.payload.size > 2) UInt.fromBytes(parsed.payload.fromIndex(parsed.payload.size - 2), ByteOrder.LITTLE).toInt() else 0

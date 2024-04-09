@@ -39,13 +39,13 @@ class FileBackupEntry(
 // from NPSServer::handleUserDefaultsBackupMsgData:backupFile:idsGuid: in nanoprefsyncd
 class UserDefaultsBackupMessage(
     val container: String?,
-    val key: String,
+    val key: String?,
     val value: List<UserDefaultsBackupMsgKey>
 ) {
     companion object : PBParsable<UserDefaultsBackupMessage>() {
         override fun fromSafePB(pb: ProtoBuf): UserDefaultsBackupMessage {
             val container = pb.readOptString(1)
-            val domain = pb.readOptString(2)!!
+            val domain = pb.readOptString(2)
             val keys = pb.readMulti(3).map { UserDefaultsBackupMsgKey.fromSafePB(it as ProtoBuf) }
 
             return UserDefaultsBackupMessage(container, domain, keys)
@@ -58,7 +58,8 @@ class UserDefaultsBackupMessage(
         if(container != null)
             fields[1] = listOf(ProtoString(container))
 
-        fields[2] = listOf(ProtoString(key))
+        if(key != null)
+            fields[2] = listOf(ProtoString(key))
 
         fields[3] = value.map { ProtoLen(it.renderProtobuf()) }
 
