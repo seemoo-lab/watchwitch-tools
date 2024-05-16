@@ -1,9 +1,6 @@
 package net.rec0de.alloyparser
 
-import net.rec0de.alloyparser.bitmage.ByteOrder
-import net.rec0de.alloyparser.bitmage.fromBytes
-import net.rec0de.alloyparser.bitmage.fromHex
-import net.rec0de.alloyparser.bitmage.fromIndex
+import net.rec0de.alloyparser.bitmage.*
 import org.bouncycastle.jce.ECNamedCurveTable
 import org.bouncycastle.jce.ECPointUtil
 import org.bouncycastle.jce.provider.BouncyCastleProvider
@@ -46,7 +43,9 @@ object Decryptor {
             val c = Cipher.getInstance("AES/CBC/PKCS5Padding")
             c.init(Cipher.DECRYPT_MODE, cryptorKey, iv)
 
-            val plain = c.update(sed) + c.doFinal()
+            val first = c.update(sed)
+            val plain = if(first != null) first + c.doFinal() else c.doFinal()
+
             plain
         }
     }

@@ -198,8 +198,9 @@ fun logProtobufMessage(parsed: ProtobufMessage) {
     if(BPListParser.bufferIsBPList(parsed.payload)) {
         val bpcontent = BPListParser().parse(parsed.payload)
         if(Decryptor.isEncryptedMessage(bpcontent)) {
+            println(bpcontent)
             val plain = tryDecrypt(parsed.payload)
-            println(plain?.hex())
+            println(plain?.hex() ?: bpcontent)
         }
         else
             println(bpcontent)
@@ -234,7 +235,7 @@ fun logProtobufMessage(parsed: ProtobufMessage) {
             } else
                 pb = ProtobufParser().parse(parsed.payload)
 
-            if (parsed.topic != null && parsed.topic!!.startsWith("com.apple.private.alloy.bulletindistributor")) {
+            if (parsed.topic != null && parsed.topic!! == "com.apple.private.alloy.bulletindistributor") {
                 println(pb)
                 when (parsed.type) {
                     1 -> println(BulletinRequest.fromSafePB(pb))
@@ -314,20 +315,29 @@ fun logDataMessage(parsed: DataMessage){
         if(Decryptor.isEncryptedMessage(bpcontent)) {
             val plain = tryDecrypt(parsed.payload)
             if(plain != null) {
-                val pb = if(parsed.responseIdentifier == null)
-                    ProtobufParser().parse(plain.fromIndex(3))
-                else
-                    ProtobufParser().parse(plain.fromIndex(2))
+                val pb = try {
+                    if(parsed.responseIdentifier == null)
+                        ProtobufParser().parse(plain.fromIndex(3))
+                    else
+                        ProtobufParser().parse(plain.fromIndex(2))
+                }
+                catch (e: Exception) {
+                    null
+                }
 
-                try {
-                    println(NanoSyncMessage.fromSafePB(pb))
+                if(pb != null) {
+                    try {
+                        println(NanoSyncMessage.fromSafePB(pb))
+                    }
+                    catch(e: Exception) {
+                        // if we fail parsing something, print the failing protobuf for debugging and then still fail
+                        println("Failed while parsing: ${plain.hex()}")
+                        println("bytes: ${plain.hex()}")
+                        e.printStackTrace()
+                    }
                 }
-                catch(e: Exception) {
-                    // if we fail parsing something, print the failing protobuf for debugging and then still fail
-                    println("Failed while parsing: $pb")
-                    println("bytes: ${plain.hex()}")
-                    e.printStackTrace()
-                }
+                else
+                    println(plain.hex())
             }
             else {
                 println("payload decryption unavailable")
