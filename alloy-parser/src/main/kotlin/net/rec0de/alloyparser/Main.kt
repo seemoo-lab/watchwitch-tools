@@ -292,7 +292,7 @@ fun logProtobufMessage(parsed: ProtobufMessage) {
         }
         catch(e: Exception) {
             e.printStackTrace()
-            println(parsed.payload.hex())
+            println("Failed while parsing: " + parsed.payload.hex())
         }
     }
 }
@@ -400,7 +400,7 @@ fun handleResourceTransfer(msg: ResourceTransferMessage) {
         val percent = if(totalBytes == 0) 100.0 else (((resourceTransferReassemblyBuffer.size.toDouble() / resourceTransferSize)*1000).roundToInt().toDouble())/10
         print("Got ${resourceTransferReassemblyBuffer.size}/$resourceTransferSize ($percent%) bytes")
     }
-    else {
+    else if(msg.payload.size > 2) {
         val offset = ULong.fromBytes(msg.payload.sliceArray(0 until 8), ByteOrder.BIG).toInt()
         val body = msg.payload.fromIndex(8)
         val content = if(GzipDecoder.bufferIsGzipCompressed(body)) GzipDecoder.inflate(body) else body
@@ -415,6 +415,9 @@ fun handleResourceTransfer(msg: ResourceTransferMessage) {
             val percent = (((resourceTransferReassemblyBuffer.size.toDouble() / resourceTransferSize)*1000).roundToInt().toDouble())/10
             println("Got ${resourceTransferReassemblyBuffer.size}/$resourceTransferSize ($percent%) bytes")
         }
+    }
+    else {
+        println("unknown resource transfer message, payload: ${msg.payload.hex()}")
     }
 
     if(resourceTransferReassemblyBuffer.size == resourceTransferSize) {
