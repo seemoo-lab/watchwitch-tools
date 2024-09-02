@@ -19,7 +19,6 @@ class KeyedArchiveDecoder {
         }
 
         fun decode(data: BPDict): BPListObject {
-            println(data.values.keys)
             // get offset of the root object in the $objects list
             val topDict = data.values[topKey]!! as BPDict
 

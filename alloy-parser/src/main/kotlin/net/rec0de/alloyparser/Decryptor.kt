@@ -45,7 +45,6 @@ object Decryptor {
 
             val first = c.update(sed)
             val plain = if(first != null) first + c.doFinal() else c.doFinal()
-
             plain
         }
     }

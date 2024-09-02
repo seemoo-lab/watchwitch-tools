@@ -315,6 +315,7 @@ fun logDataMessage(parsed: DataMessage){
         if(Decryptor.isEncryptedMessage(bpcontent)) {
             val plain = tryDecrypt(parsed.payload)
             if(plain != null) {
+                //println("plaintext: ${plain.hex()}")
                 val pb = try {
                     if(parsed.responseIdentifier == null)
                         ProtobufParser().parse(plain.fromIndex(3))
