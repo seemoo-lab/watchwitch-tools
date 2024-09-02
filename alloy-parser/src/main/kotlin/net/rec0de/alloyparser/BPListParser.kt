@@ -481,3 +481,19 @@ data class NSUUID(val value: ByteArray) : BPListObject(), KeyedArchiveCodable {
 data class NSData(val value: ByteArray) : BPListObject(), KeyedArchiveCodable {
     override fun toString() = "NSData(${value.hex()})"
 }
+
+data class RecursiveBacklink(val index: Int, var value: BPListObject?) : BPListObject() {
+    override fun toString() = "Backlink(not rendering, index $index)"
+}
+
+// We need "relaxed" versions of BPList collection types where we can put in not yet resolved recursive backlinks during keyed archive decoding
+// these will be transformed back to their proper equivalents during the decoding
+data class TransientBPArray(val values: List<BPListObject>) : BPListObject() {
+    override fun toString() = "[${values.joinToString(", ")}]"
+}
+data class TransientBPSet(val entries: Int, val values: List<BPListObject>) : BPListObject() {
+    override fun toString() = "<${values.joinToString(", ")}>"
+}
+data class TransientBPDict(val values: Map<BPListObject, BPListObject>) : BPListObject() {
+    override fun toString() = values.toString()
+}

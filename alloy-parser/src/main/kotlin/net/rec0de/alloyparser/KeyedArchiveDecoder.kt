@@ -19,6 +19,7 @@ class KeyedArchiveDecoder {
         }
 
         fun decode(data: BPDict): BPListObject {
+            println(data.values.keys)
             // get offset of the root object in the $objects list
             val topDict = data.values[topKey]!! as BPDict
 
@@ -36,55 +37,65 @@ class KeyedArchiveDecoder {
             val objects = data.values[objectsKey]!! as BPArray
 
             val rootObj = objects.values[topIndex]
-            val resolved = optionallyResolveObjectReference(rootObj, objects)
+            val resolved = optionallyResolveObjectReference(rootObj, objects, listOf(topIndex))
             return transformSupportedClasses(resolved)
         }
 
-        private fun optionallyResolveObjectReference(thing: CodableBPListObject, objects: BPArray): CodableBPListObject {
+        private fun optionallyResolveObjectReference(thing: CodableBPListObject, objects: BPArray, currentlyResolving: List<Int> = emptyList()): BPListObject {
             return when(thing) {
-                is BPUid -> optionallyResolveObjectReference(objects.values[UInt.fromBytes(thing.value, ByteOrder.BIG).toInt()], objects)
-                is BPArray -> BPArray(thing.values.map { optionallyResolveObjectReference(it, objects) })
-                is BPSet -> BPSet(thing.entries, thing.values.map { optionallyResolveObjectReference(it, objects) })
+                is BPUid -> {
+                    val id = Int.fromBytes(thing.value, ByteOrder.BIG)
+                    if(currentlyResolving.contains(id))
+                        RecursiveBacklink(id, null)
+                    else
+                        optionallyResolveObjectReference(objects.values[id], objects, currentlyResolving + id)
+                }
+
+                is BPArray -> TransientBPArray(thing.values.map { optionallyResolveObjectReference(it, objects, currentlyResolving) })
+                is BPSet -> TransientBPSet(thing.entries, thing.values.map { optionallyResolveObjectReference(it, objects, currentlyResolving) })
                 is BPDict -> {
                     // nested keyed archives will be decoded separately
                     if(isKeyedArchive(thing))
                         thing
                     else
-                        BPDict(thing.values.map {
-                            Pair(optionallyResolveObjectReference(it.key, objects), optionallyResolveObjectReference(it.value, objects))
+                        TransientBPDict(thing.values.map {
+                            Pair(optionallyResolveObjectReference(it.key, objects), optionallyResolveObjectReference(it.value, objects, currentlyResolving))
                         }.toMap())
                 }
                 else -> thing
             }
         }
 
-        private fun transformSupportedClasses(thing: CodableBPListObject): BPListObject {
+        private fun transformSupportedClasses(thing: BPListObject): BPListObject {
             // decode nested archives
             if(isKeyedArchive(thing))
                 return decode(thing as BPDict)
 
             return when(thing) {
-                is BPArray -> {
+                is RecursiveBacklink -> {
+                    thing
+                }
+                is TransientBPArray -> {
                     val transformedValues = thing.values.map { transformSupportedClasses(it) }
                     if(transformedValues.all { it is CodableBPListObject })
                         BPArray(transformedValues.map { it as CodableBPListObject })
                     else
                         NSArray(transformedValues)
                 }
-                is BPSet -> {
+                is TransientBPSet -> {
                     val transformedValues = thing.values.map { transformSupportedClasses(it) }
                     if(transformedValues.all { it is CodableBPListObject })
                         BPSet(thing.entries, transformedValues.map { it as CodableBPListObject })
                     else
                         NSArray(transformedValues)
                 }
-                is BPDict -> {
+                is TransientBPDict -> {
                     if(thing.values.containsKey(classKey)) {
-                        val className = ((thing.values[classKey] as BPDict).values[classNameKey] as BPAsciiString).value
+                        val className = ((thing.values[classKey] as TransientBPDict).values[classNameKey] as BPAsciiString).value
                         when(className) {
                             "NSDictionary", "NSMutableDictionary" -> {
-                                val keyList = (thing.values[BPAsciiString("NS.keys")]!! as BPArray).values.map { transformSupportedClasses(it) }
-                                val valueList = (thing.values[BPAsciiString("NS.objects")]!! as BPArray).values.map { transformSupportedClasses(it) }
+                                val keyList = (thing.values[BPAsciiString("NS.keys")]!! as TransientBPArray).values.map { transformSupportedClasses(it) }
+                                val valueList = (thing.values[BPAsciiString("NS.objects")]!! as TransientBPArray).values.map { transformSupportedClasses(it) }
                                 val map = keyList.zip(valueList).toMap()
                                 NSDict(map)
                             }
@@ -93,16 +104,24 @@ class KeyedArchiveDecoder {
                                 string
                             }
                             "NSMutableArray", "NSArray" -> {
-                                val list = (thing.values[BPAsciiString("NS.objects")]!! as BPArray).values.map { transformSupportedClasses(it) }
+                                val list = (thing.values[BPAsciiString("NS.objects")]!! as TransientBPArray).values.map { transformSupportedClasses(it) }
                                 NSArray(list)
                             }
                             "NSMutableSet", "NSSet" -> {
-                                val list = (thing.values[BPAsciiString("NS.objects")]!! as BPArray).values.map { transformSupportedClasses(it) }
+                                val list = (thing.values[BPAsciiString("NS.objects")]!! as TransientBPArray).values.map { transformSupportedClasses(it) }
                                 NSSet(list.toSet())
                             }
                             "NSData", "NSMutableData" -> {
-                                val bytes = (thing.values[BPAsciiString("NS.data")]!! as BPData).value
-                                NSData(bytes)
+                                val value = thing.values[BPAsciiString("NS.data")]!!
+
+                                // why do some NSData objects contain an NSDict with a nested keyed archive?
+                                if(isKeyedArchive(value)) {
+                                    decode(value as BPDict)
+                                }
+                                else {
+                                    val bytes = (value as BPData)
+                                    NSData(bytes.value)
+                                }
                             }
                             "NSDate" -> {
                                 val timestamp = (thing.values[BPAsciiString("NS.time")]!! as BPReal).value
