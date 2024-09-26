@@ -51,7 +51,7 @@ rcv NRLP(#30, t=0x03) 7233...
 
 ## Wireshark Dissectors
 
-We provide Lua dissectors for use with wireshark for Magnet, NRLP, CLink, NWSC, Alloy, and Shoes at [github.com/seemoo-lab/watchwitch-wireshark](https://github.com/seemoo-lab/watchwitch-wireshark). Decryption of IPSec payloads requires extracting negotiated ESP keys at runtime. Depending on your Apple Watch version, Wireshark may not support decryption of the negotiated algorithms. We supply an additional patch to add support for ChaChaPoly-IIV encryption, but other modes (AES-GCM-IIV) are unsupported at this time. 
+We provide Lua dissectors for use with wireshark for Magnet, NRLP, CLink, NWSC, Alloy, and Shoes at [watchwitch-wireshark](https://github.com/seemoo-lab/watchwitch-wireshark). Decryption of IPSec payloads requires extracting negotiated ESP keys at runtime. Depending on your Apple Watch version, Wireshark may not support decryption of the negotiated algorithms. We supply an additional patch to add support for ChaChaPoly-IIV encryption, but other modes (AES-GCM-IIV) are unsupported at this time. 
 
 ## Frida Scripts
 
