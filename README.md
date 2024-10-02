@@ -87,6 +87,16 @@ Usage:
 
 `frida -U terminusd -l extractKeys.js`
 
+### dumpEspKeys.js
+
+[frida-scripts/dumpEspKeys.js](frida-scripts/dumpEspKeys.js)
+
+Hooks into the `NEIKEv2ChildSA` class to print encryption keys for ESP SAs. Can be used to obtain keys to decrypt packet captures with wireshark and [watchwitch-wireshark](https://github.com/seemoo-lab/watchwitch-wireshark).
+
+Usage:
+
+`frida -U terminusd -l dumpEspKeys.js`
+
 ### notify-inject-PoC.js
 
 [frida-scripts/notify-inject-PoC.js](frida-scripts/notify-inject-PoC.js)
