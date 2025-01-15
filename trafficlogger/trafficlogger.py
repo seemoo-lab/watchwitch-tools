@@ -238,7 +238,7 @@ def detectProtocol(direction, payload, protocolStack):
         if collectData:
             archiver.logMagnet(direction, "MagnetS", payload)
 
-        proto = Template("MagnetS(op=${op}, len=${length})").substitute(op=phex(opcode), length=length) + " " + logMagnet(opcode, payload[4:])
+        proto = Template("MagnetS(op=${op}, len=${length})").substitute(op=phex(opcode), length=length) + " " + logMagnet(opcode, payload[2:])
         return [(proto, payload[2:], False)]
     # SEQACK, special ack or something?
     elif payloadLen == 2 and payload[0] == 1 and len(protocolStack) == 1:
