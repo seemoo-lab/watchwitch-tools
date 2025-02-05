@@ -66,7 +66,7 @@ try {
   log("ERROR! Couldn't hook NEIKEv2Transport class! (new function names)")
 }
 // Encryption / decryption hooks (required to show plaintext IKEv2 packets)
-
+const ccchacha20poly1305_decrypt_oneshot = Module.getExportByName('libcorecrypto.dylib', 'ccchacha20poly1305_decrypt_oneshot')
 const ccchacha20poly1305_encrypt = Module.getExportByName('libcorecrypto.dylib', 'ccchacha20poly1305_encrypt')
 const ccchacha20poly1305_decrypt = Module.getExportByName('libcorecrypto.dylib', 'ccchacha20poly1305_decrypt')
 
@@ -115,6 +115,14 @@ Interceptor.attach(ccchacha20poly1305_decrypt, {
       outstandingCiphertexts.delete(this.ciphertext)
       logIKEv2Packet(packet, true)
     }
+  }
+})
+
+Interceptor.attach(ccchacha20poly1305_decrypt_oneshot, {
+  onEnter(args) {
+    let key = readHex(args[1], 36)
+    if(showChaChaPlaintexts)
+      log(`ChaChaPoly decrypt oneshot with key ${key}`, 4)
   }
 })
 
@@ -269,13 +277,16 @@ Interceptor.attach(cchmac, {
 // END HOOKS
 
 const notifyTypes = ["INITIAL_CONTACT", "SET_WINDOW_SIZE", "ADDITIONAL_TS_POSSIBLE", "IPCOMP_SUPPORTED", "NAT_DETECTION_SOURCE_IP", "NAT_DETECTION_DESTINATION_IP", "COOKIE", "USE_TRANSPORT_MODE", "HTTP_CERT_LOOKUP_SUPPORTED", "REKEY_SA", "ESP_TFC_PADDING_NOT_SUPPORTED", "NON_FIRST_FRAGMENTS_ALSO", "MOBIKE_SUPPORTED", "ADDITIONAL_IP4_ADDRESS", "ADDITIONAL_IP6_ADDRESS", "NO_ADDITIONAL_ADDRESSES", "UPDATE_SA_ADDRESSES", "COOKIE2", "NO_NATS_ALLOWED", "AUTH_LIFETIME", "MULTIPLE_AUTH_SUPPORTED", "ANOTHER_AUTH_FOLLOWS", "REDIRECT_SUPPORTED", "REDIRECT", "REDIRECTED_FROM", "TICKET_LT_OPAQUE", "TICKET_REQUEST", "TICKET_ACK", "TICKET_NACK", "TICKET_OPAQUE", "LINK_ID", "USE_WESP_MODE", "ROHC_SUPPORTED", "EAP_ONLY_AUTHENTICATION", "CHILDLESS_IKEV2_SUPPORTED", "QUICK_CRASH_DETECTION", "IKEV2_MESSAGE_ID_SYNC_SUPPORTED", "IPSEC_REPLAY_COUNTER_SYNC_SUPPORTED", "IKEV2_MESSAGE_ID_SYNC", "IPSEC_REPLAY_COUNTER_SYNC", "SECURE_PASSWORD_METHODS", "PSK_PERSIST", "PSK_CONFIRM", "ERX_SUPPORTED", "IFOM_CAPABILITY", "SENDER_REQUEST_ID", "IKEV2_FRAGMENTATION_SUPPORTED", "SIGNATURE_HASH_ALGORITHMS", "CLONE_IKE_SA_SUPPORTED", "CLONE_IKE_SA", "PUZZLE", "USE_PPK", "PPK_IDENTITY", "NO_PPK_AUTH", "INTERMEDIATE_EXCHANGE_SUPPORTED", "IP4_ALLOWED", "IP6_ALLOWED"]
-const errorTypes = ["UNSUPPORTED_CRITICAL_PAYLOAD", "INVALID_IKE_SPI", "INVALID_MAJOR_VERSION", "INVALID_SYNTAX", "INVALID_MESSAGE_ID", "INVALID_SPI", "NO_PROPOSAL_CHOSEN", "INVALID_KE_PAYLOAD", "AUTHENTICATION_FAILED", "SINGLE_PAIR_REQUIRED", "NO_ADDITIONAL_SAS", "INTERNAL_ADDRESS_FAILURE", "FAILED_CP_REQUIRED", "TS_UNACCEPTABLE", "INVALID_SELECTORS", "TEMPORARY_FAILURE", "CHILD_SA_NOT_FOUND"]
-
+const errorTypes = ["reserved", "UNSUPPORTED_CRITICAL_PAYLOAD", "reserved", "reserved", "INVALID_IKE_SPI", "INVALID_MAJOR_VERSION", "reserved", "INVALID_SYNTAX", "reserved", "INVALID_MESSAGE_ID", "reserved", "INVALID_SPI", "reserved", "reserved", "NO_PROPOSAL_CHOSEN", "reserved", "reserved", "INVALID_KE_PAYLOAD", "reserved", "reserved", "reserved", "reserved", "reserved", "reserved", "AUTHENTICATION_FAILED", "reserved", "reserved", "reserved", "reserved", "reserved", "reserved", "reserved", "reserved", "reserved", "SINGLE_PAIR_REQUIRED", "NO_ADDITIONAL_SAS", "INTERNAL_ADDRESS_FAILURE", "FAILED_CP_REQUIRED", "TS_UNACCEPTABLE", "INVALID_SELECTORS", "TEMPORARY_FAILURE", "CHILD_SA_NOT_FOUND", "INVALID_GROUP_ID", "AUTHORIZATION_FAILURE", "STATE_NOT_FOUND", "TS_MAX_QUEUE"]
 const privateNotifyTypes = {
   48601: "Encrypted prelude",
   48602: "Remote terminus version",
   48603: "Remote device name",
   48604: "Remote build version",
+  50410: "InitiatorLocalPublicClassDKeysEncryptedWithIDS",
+  50411: "InitiatorLocalPublicClassDKeys",
+  50412: "InitiatorLocalPublicClassCKeys",
+  50413: "InitiatorLocalPublicClassAKeys",
   50701: "ProxyNotifyPayload?",
   50702: "LinkDirectorMessage",
   50801: "InnerAddressInitiatorClassD",
@@ -515,7 +526,7 @@ function analyzeSingleIKEv2Payload(type, payload, initiatorCookie, isFromInitiat
   else if(stringType == "CONFIG") {
     const configTypes = ["CFG_REQUEST", "CFG_REPLY", "CFG_SET", "CFG_ACK"]
     const configType = parseInt(payload.substring(0, 2), 16)
-    log("CONFIG - " + configTypes[configType - 1])
+    log("CONFIG - " + configTypes[configType - 1] + " payload: " + payload.substring(8))
   }
   else if(stringType == "IDinit" || stringType == "IDresp") {
     const idType = parseInt(payload.substring(0, 2), 16)
