@@ -142,9 +142,13 @@ class EspDecryptor:
         nonce = bytes(salt + iv)
 
         #print("Attempting decryption of " + payload[0:8].hex() + "..." + payload[-8:].hex())
+        #print("Decrypting with key " + key.hex() + " salt " + salt.hex())
+        #print(payload.hex())
 
         chacha = ChaCha20Poly1305(key)
         plain = chacha.decrypt(nonce, data, aad)
+
+        #print(plain.hex())
 
         return bytearray(plain)
 
@@ -171,4 +175,8 @@ class EspDecryptor:
             ctx["espSaltI"] = keymat[32:36]
             ctx["espKeyR"] = keymat[36:68]
             ctx["espSaltR"] = keymat[68:72]
-            print("Derived crypto secrets for context " + context)
+            #print("Derived crypto secrets for context " + context)
+            #print("initiator key: " + ctx["espKeyI"].hex())
+            #print("responder key: " + ctx["espKeyR"].hex())
+            #print("initiator salt: " + ctx["espSaltI"].hex())
+            #print("responder salt: " + ctx["espSaltR"].hex())

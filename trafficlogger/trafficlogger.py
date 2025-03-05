@@ -349,7 +349,7 @@ def detectProtocol(direction, payload, protocolStack):
     elif matchesHeuristicESP(payload):
         return handleESP(payload)
     # NRLP, fragmented (first fragment)
-    # Heuristic: reserved bits in sequence numbers not set, length looks 'reasonable', type is one of the known packet types
+    # Heuristic: length looks 'reasonable', type is one of the known packet types, and we're on a terminusLink l2cap cid
     elif payloadLen > 5 and int.from_bytes(payload[1:3], byteorder="big") < 4096 and payload[0] in NRLPPacketTypes and "terminusLink" in protocolStack[0]:
         effectivePayload = payload
         lng = int.from_bytes(effectivePayload[1:3], byteorder="big")
@@ -383,10 +383,10 @@ def detectProtocol(direction, payload, protocolStack):
     elif payloadLen > 32 and (direction == "snd" and len(NRLPSndFragBuffer) > 0 or direction == "rcv" and len(NRLPRcvFragBuffer) > 0) and "terminusLink" in protocolStack[0]:
        
         if direction == "snd":
-            effectivePayload = NRLPSndFragBuffer + payload[2:]
+            effectivePayload = NRLPSndFragBuffer + payload
             NRLPSndFragBuffer = ""
         else:
-            effectivePayload = NRLPRcvFragBuffer + payload[2:]
+            effectivePayload = NRLPRcvFragBuffer + payload
             NRLPRcvFragBuffer = ""
         return detectProtocol(direction, effectivePayload, protocolStack)
 
