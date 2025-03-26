@@ -70,8 +70,8 @@ class OpackParser() : ParseCompanion() {
             in 0x08..0x2f -> BPInt(BigInteger.valueOf((type - 8).toLong()))
             0x30 -> BPInt(BigInteger.valueOf(readInt(bytes, 1).toLong()))
             0x31 -> BPInt(BigInteger.valueOf(readInt(bytes, 2).toLong()))
-            0x32 -> BPInt(BigInteger.valueOf(readInt(bytes, 3).toLong()))
-            0x33 -> BPInt(BigInteger.valueOf(readInt(bytes, 4).toLong()))
+            0x32 -> BPInt(BigInteger.valueOf(readInt(bytes, 4).toLong()))
+            0x33 -> BPInt(BigInteger.valueOf(readInt(bytes, 8).toLong()))
             else -> throw Exception("Unexpected OPACK int ${bytes.hex()}")
         }
     }
