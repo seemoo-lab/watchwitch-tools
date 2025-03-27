@@ -7,6 +7,8 @@ enum class ByteOrder {
 @OptIn(ExperimentalUnsignedTypes::class)
 fun ByteArray.hex() = asUByteArray().joinToString("") { it.toString(16).padStart(2, '0') }
 fun ByteArray.fromIndex(i: Int) = sliceArray(i until size)
+fun ByteArray.untilIndex(i: Int) = sliceArray(0 until i)
+
 @OptIn(ExperimentalUnsignedTypes::class)
 fun ByteArray.decodeAsUTF16BE(): String {
     // oh my
@@ -28,7 +30,18 @@ fun UInt.Companion.fromBytes(bytes: ByteArray, byteOrder: ByteOrder): UInt {
     check(bytes.size <= 4) { "trying to parse oversized bytearray ${bytes.hex()} as UInt" }
     return ULong.fromBytes(bytes, byteOrder).toUInt()
 }
-fun Int.Companion.fromBytes(bytes: ByteArray, byteOrder: ByteOrder) = UInt.fromBytes(bytes, byteOrder).toInt()
+fun Int.Companion.fromBytes(bytes: ByteArray, byteOrder: ByteOrder, explicitlySigned: Boolean = false): Int {
+    val value = UInt.fromBytes(bytes, byteOrder).toInt()
+
+    // usually, we only get negative integers when the input is 4 bytes long and represents a signed negative int
+    // however, we might want to interpret 1, 2, or 3-byte signed ints. these will be negative if their highest bit
+    // is set, i.e. if the unsigned value is >= 1 shl bit-size
+    return if(!explicitlySigned || bytes.size == 4 || value < 1 shl (bytes.size*8 - 1))
+        value
+    else {
+        value - (1 shl (bytes.size*8))
+    }
+}
 
 fun Long.toBytes(byteOrder: ByteOrder): ByteArray {
     val bytesBE = byteArrayOf(
@@ -50,6 +63,12 @@ fun Int.toBytes(byteOrder: ByteOrder): ByteArray {
     return if(byteOrder == ByteOrder.BIG) bytesBE else bytesBE.reversed().toByteArray()
 }
 fun UInt.toBytes(byteOrder: ByteOrder) = this.toInt().toBytes(byteOrder)
+
+fun Short.toBytes(byteOrder: ByteOrder): ByteArray {
+    val bytesBE = byteArrayOf((this.toInt() shr 8).toByte(), (this.toInt() shr 0).toByte())
+    return if(byteOrder == ByteOrder.BIG) bytesBE else bytesBE.reversed().toByteArray()
+}
+fun UShort.toBytes(byteOrder: ByteOrder) = this.toShort().toBytes(byteOrder)
 
 // Floats
 
@@ -99,7 +118,7 @@ fun String.fromHex(): ByteArray {
 
 
 
-// by ephemient from https://slack-chats.kotlinlang.org/t/527242/i-have-a-bytearray-of-utf-16-encoded-bytes-read-from-a-cinte
+// based on code by ephemient from https://slack-chats.kotlinlang.org/t/527242/i-have-a-bytearray-of-utf-16-encoded-bytes-read-from-a-cinte
 @OptIn(ExperimentalUnsignedTypes::class)
 fun UShortArray.utf16BEToUtf8(): UByteArray {
     var i = if (this.firstOrNull() == 0xFFEF.toUShort()) 1 else 0 // skip BOM
