@@ -110,7 +110,7 @@ class ProtobufMessage(sequence: Int, streamID: Int, flags: Int, responseIdentifi
     }
 
     override fun toStringShort() = "ProtobufMessage(seq $sequence stream $streamID, flags 0x${flags.toString(16)}, compressed? $actuallyCompressed uuid $messageUUID, responseID $responseIdentifier, topic $topic, expires $normalizedExpiryDate, type $type, isResponse $isResponse)"
-    override fun toString() = "ProtobufMessage(seq $sequence stream $streamID, flags 0x${flags.toString(16)}, compressed? $actuallyCompressed uuid $messageUUID, responseID $responseIdentifier, topic $topic, expires $normalizedExpiryDate, type $type, isResponse $isResponse payload ${payload.hex()})"
+    override fun toString() = "ProtobufMessage(seq $sequence stream $streamID, flags 0x${flags.toString(16)}, compressedFlag? $compressed compressed? $actuallyCompressed uuid $messageUUID, responseID $responseIdentifier, topic $topic, expires $normalizedExpiryDate, type $type, isResponse $isResponse payload ${payload.hex()})"
 }
 
 class Handshake(sequence: Int): UTunMessage(sequence) {

@@ -29,6 +29,7 @@ var resourceTransferFilename = ""
 
 var printShort = false
 var muteControl = false
+var rcvOnly = false
 
 fun main(args: Array<String>) {
 
@@ -47,6 +48,7 @@ fun main(args: Array<String>) {
     }
     printShort = args.any{ it.startsWith("--short")}
     muteControl = args.any{ it.startsWith("--noctrl")}
+    rcvOnly = args.any{ it.startsWith("--rcv") }
     val path = args.first { !it.startsWith("--") }
 
     if(include.isNotEmpty())
@@ -129,7 +131,10 @@ fun readControl(incoming: Boolean, bytes: ByteArray) {
         return
     val parsed = UTunControlMessage.parse(bytes)
     val direction = if(incoming) "rcv" else "snd"
-    println("$direction ctrl $parsed")
+    if(printShort)
+        println("$direction ctrl $parsed")
+    else
+        println("$direction ctrl $parsed [${bytes.hex()}]")
 }
 
 fun readUTun(incoming: Boolean, opcode: Int, bytes: ByteArray, include: Set<String>, exclude: Set<String>) {
@@ -176,6 +181,9 @@ fun readUTun(incoming: Boolean, opcode: Int, bytes: ByteArray, include: Set<Stri
     if(include.isNotEmpty() && (topic == null || !include.contains(topic)))
         return
     else if(exclude.isNotEmpty() && exclude.contains(topic))
+        return
+
+    if(rcvOnly && !incoming)
         return
 
     if(printShort)

@@ -14,7 +14,7 @@ class NanoSyncMessage(
     val activationRestore: NanoSyncActivationRestore?
 ) {
     override fun toString(): String {
-        return "NanoSyncMessage(v$version, $status, actrst $activationRestore, changeset $changeSet)"
+        return "NanoSyncMessage(v$version, pID $persistentPairingUUID, hID $healthPairingUUID, $status, actrst $activationRestore, changeset $changeSet)"
     }
 
     companion object : PBParsable<NanoSyncMessage>() {
@@ -236,19 +236,22 @@ class NanoSyncAnchor(
 }
 
 class NanoSyncActivationRestore(
+    val restoreIdentifier: UUID?,
     val sequenceNumber: Int?,
     val statusCode: Int?,
-    val defaultSouceBundleIdentifier: String?
+    val defaultSouceBundleIdentifier: String?,
 ) {
     companion object : PBParsable<NanoSyncActivationRestore>() {
         override fun fromSafePB(pb: ProtoBuf): NanoSyncActivationRestore {
-            // 1: restore identifier
+            val restoreIdentifier = (pb.readOptionalSinglet(1) as ProtoLen?)?.value
             val seq = pb.readOptShortVarInt(2)
             val status = pb.readOptShortVarInt(3)
             val bundle = pb.readOptString(4)
             // 6: obliterated health pairing uuids
 
-            return NanoSyncActivationRestore(seq, status, bundle)
+            val restoreUUID = if(restoreIdentifier == null) null else Utils.uuidFromBytes(restoreIdentifier)
+
+            return NanoSyncActivationRestore(restoreUUID, seq, status, bundle)
         }
 
         fun statusCodeAsString(statusCode: Int?): String {
@@ -266,7 +269,7 @@ class NanoSyncActivationRestore(
         get() = statusCodeAsString(statusCode)
 
     override fun toString(): String {
-        return "ActivationRestore(seq $sequenceNumber, status $statusString, bundle $defaultSouceBundleIdentifier)"
+        return "ActivationRestore(restoreID $restoreIdentifier seq $sequenceNumber, status $statusString, bundle $defaultSouceBundleIdentifier)"
     }
 }
 
