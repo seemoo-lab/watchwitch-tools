@@ -37,6 +37,7 @@ Interceptor.attach(ObjC.classes.IDSUTunConnection['- _processDecryptedMessage:']
       console.log(`rcv utun ${type} ${hex}`)
   }
 })*/
+const MessageProtection = Process.getModuleByName('MessageProtection');
 
 Interceptor.attach(ObjC.classes.IDSLinkManager['- _processLMCommandPacket:fromLink:deviceUniqueID:cbuuid:'].implementation, {
   onEnter(args) {
@@ -81,6 +82,7 @@ Interceptor.attach(ObjC.classes.IDSUTunConnection['- _sendOTREncryptedMessage:us
     }
   }
 })
+const libcorecrypto_dylib = Process.getModuleByName('libcorecrypto.dylib');
 
 Interceptor.attach(ObjC.classes.IDSEncryptionHelpers['+ encryptLocalDeliveryPayload:toDevice:forService:withDataProtectionClass:encryptionType:priority:error:'].implementation, {
   onEnter(args) {
@@ -115,6 +117,7 @@ Interceptor.attach(ObjC.classes.IDSUTunControlChannel['- sendPriorityMessage:'].
     console.log(`snd utunctrl ${hex}`)
   }
 })
+const libcommonCrypto_dylib = Process.getModuleByName('libcommonCrypto.dylib');
 
 Interceptor.attach(ObjC.classes.IDSUTunControlChannel['- useConnection:withFirstMessage:'].implementation, {
   onEnter(args) {
@@ -137,16 +140,16 @@ Interceptor.attach(ObjC.classes.IDSUTunControlChannel['- writeToConnection'].imp
 
 
 
-const verifyexpose = Module.getExportByName('MessageProtection', 'SecMPVerifyAndExposeMessage')
+const verifyexpose = MessageProtection.getExportByName('SecMPVerifyAndExposeMessage')
 
-const verifysignature = Module.getExportByName('MessageProtection', 'SecKeyVerifySignature')
-const decrypt = Module.getExportByName('MessageProtection', 'SecKeyCreateDecryptedData')
+const verifysignature = MessageProtection.getExportByName('SecKeyVerifySignature')
+const decrypt = MessageProtection.getExportByName('SecKeyCreateDecryptedData')
 
-const rsa = Module.getExportByName('libcorecrypto.dylib', 'ccrsa_priv_crypt')
-const encodePrivKeySize = Module.getExportByName('libcorecrypto.dylib', 'ccder_encode_rsa_priv_size')
-const encodePrivKey = Module.getExportByName('libcorecrypto.dylib', 'ccder_encode_rsa_priv')
+const rsa = libcorecrypto_dylib.getExportByName('ccrsa_priv_crypt')
+const encodePrivKeySize = libcorecrypto_dylib.getExportByName('ccder_encode_rsa_priv_size')
+const encodePrivKey = libcorecrypto_dylib.getExportByName('ccder_encode_rsa_priv')
 
-const cryptor = Module.getExportByName('libcommonCrypto.dylib', 'CCCryptorCreate')
+const cryptor = libcommonCrypto_dylib.getExportByName('CCCryptorCreate')
 
 Interceptor.attach(verifyexpose, {
   outbuf: null,

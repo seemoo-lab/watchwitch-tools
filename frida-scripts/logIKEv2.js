@@ -1,5 +1,5 @@
 // Some logging config:
-const showIKEv2Payloads = false
+const showIKEv2Payloads = true
 const ignoreIKEv2InfoPackets = false
 const showChaChaPlaintexts = false
 const showEd25519Payloads = false
@@ -21,6 +21,7 @@ const outstandingCiphertexts = new Map()
 // Hooks:
 
 // IKEv2 packet receive hook (required for logging incoming packets)
+const libcorecrypto_dylib = Process.getModuleByName('libcorecrypto.dylib');
 Interceptor.attach(ObjC.classes.NEIKEv2Transport['- receivePacketData:'].implementation, {
   packet: null,
   onEnter(args) {
@@ -66,9 +67,9 @@ try {
   log("ERROR! Couldn't hook NEIKEv2Transport class! (new function names)")
 }
 // Encryption / decryption hooks (required to show plaintext IKEv2 packets)
-const ccchacha20poly1305_decrypt_oneshot = Module.getExportByName('libcorecrypto.dylib', 'ccchacha20poly1305_decrypt_oneshot')
-const ccchacha20poly1305_encrypt = Module.getExportByName('libcorecrypto.dylib', 'ccchacha20poly1305_encrypt')
-const ccchacha20poly1305_decrypt = Module.getExportByName('libcorecrypto.dylib', 'ccchacha20poly1305_decrypt')
+const ccchacha20poly1305_decrypt_oneshot = libcorecrypto_dylib.getExportByName('ccchacha20poly1305_decrypt_oneshot')
+const ccchacha20poly1305_encrypt = libcorecrypto_dylib.getExportByName('ccchacha20poly1305_encrypt')
+const ccchacha20poly1305_decrypt = libcorecrypto_dylib.getExportByName('ccchacha20poly1305_decrypt')
 
 Interceptor.attach(ccchacha20poly1305_encrypt, {
   ciphertext: null,
@@ -155,8 +156,8 @@ Interceptor.attach(ccchacha20poly1305_decrypt_oneshot, {
 
 // Optional encrypt / decrypt hooks, for prettier logging only
 
-const ccchacha20poly1305_verify = Module.getExportByName('libcorecrypto.dylib', 'ccchacha20poly1305_verify')
-const ccchacha20poly1305_finalize = Module.getExportByName('libcorecrypto.dylib', 'ccchacha20poly1305_finalize')
+const ccchacha20poly1305_verify = libcorecrypto_dylib.getExportByName('ccchacha20poly1305_verify')
+const ccchacha20poly1305_finalize = libcorecrypto_dylib.getExportByName('ccchacha20poly1305_finalize')
 
 Interceptor.attach(ccchacha20poly1305_verify, {
   onEnter(args) {
@@ -214,8 +215,8 @@ try {
 
 // Signature generation & verification hooks, very optional, only required to debug signatures
 
-const ed25519_sign = Module.getExportByName('libcorecrypto.dylib', 'cced25519_sign');
-const ed25519_verify = Module.getExportByName('libcorecrypto.dylib', 'cced25519_verify')
+const ed25519_sign = libcorecrypto_dylib.getExportByName('cced25519_sign');
+const ed25519_verify = libcorecrypto_dylib.getExportByName('cced25519_verify')
 
 Interceptor.attach(ed25519_sign, {
   sigBuffer: null,
@@ -252,7 +253,7 @@ Interceptor.attach(ed25519_verify, {
 
 // HMAC calculation hook, very optional, debugging only
 
-const cchmac = Module.getExportByName('libcorecrypto.dylib', 'cchmac')
+const cchmac = libcorecrypto_dylib.getExportByName('cchmac')
 
 Interceptor.attach(cchmac, {
   data: null,
